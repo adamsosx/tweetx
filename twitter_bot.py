@@ -62,11 +62,10 @@ def format_tweet(top_3_tokens):
 
     for i, token in enumerate(top_3_tokens, 1):
         calls = token.get('unique_channels', 0) # Metryka dla "calls"
-        name = token.get('name', 'Unknown Name') # Dodajmy nazwę dla pełniejszej informacji
         symbol = token.get('symbol', 'N/A')
         address = token.get('address', 'No Address Provided') 
 
-        tweet += f"{i}. ${symbol} ({name})\n" # Dodano nazwę tokena
+        tweet += f"{i}. ${symbol} \n" # Dodano nazwę tokena
         tweet += f"   CA: {address}\n"
         tweet += f"   Calls: {calls}\n\n" # Zmieniono "calls calls" na "Calls: {calls}"
           
@@ -74,7 +73,7 @@ def format_tweet(top_3_tokens):
     if top_3_tokens:
         tweet = tweet.rstrip('\n') + "\n"
 
-    tweet += "\n#SOL #Crypto #DeFi #TopTokens #Altcoins #RadarFun" # Dodano więcej hashtagów
+    tweet += "\n#SOL
     
     # Proste skracanie tweeta, jeśli jest za długi (Twitter ma limit 280 znaków)
     if len(tweet) > 280:
