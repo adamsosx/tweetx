@@ -78,7 +78,7 @@ def format_tweet(top_3_tokens):
 
 def format_link_tweet():
     """Format the link tweet (reply)"""
-    return "🔗 https://outlight.fun/ #SOL #Outlight"
+    return "🔗 https://outlight.fun/\n#SOL #Outlight"
 
 def main():
     logging.info("GitHub Action: Bot execution started.")
