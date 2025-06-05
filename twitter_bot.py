@@ -2,38 +2,29 @@ import tweepy
 import requests
 import json
 from datetime import datetime, timezone # Dodano timezone dla UTC
-# import time # Usunięto, niepotrzebne dla GitHub Actions
 import logging
-import os # Potrzebny do odczytu zmiennych środowiskowych
+import os 
 
-# Konfiguracja logowania - logowanie do standardowego wyjścia dla GitHub Actions
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler()] # Logowanie do konsoli/outputu Akcji
 )
 
-# Odczytaj dane API ze zmiennych środowiskowych (GitHub Secrets)
 api_key = os.getenv("TWITTER_API_KEY")
 api_secret = os.getenv("TWITTER_API_SECRET")
 access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
-# Endpoint radar.fun
 RADAR_API_URL = "https://radar.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
     """Pobiera dane z API radar.fun i zwraca top 3 tokeny"""
     try:
-        # UWAGA: verify=False jest niezalecane w produkcji.
         response = requests.get(RADAR_API_URL, verify=False)
         response.raise_for_status()
         data = response.json()
         
-        # Sortujemy tokeny według liczby wywołań w ostatniej godzinie (zgodnie z Twoim oryginalnym kodem)
-        # UWAGA: W format_tweet używasz 'unique_channels' jako 'calls'. Może to prowadzić
-        # do sytuacji, gdzie sortujesz po innej metryce niż ta, którą finalnie wyświetlasz.
-        # Rozważ ujednolicenie tego (np. sortowanie po 'unique_channels').
         sorted_tokens = sorted(data, key=lambda x: x.get('calls1h', 0), reverse=True)
         
         top_3 = sorted_tokens[:3]
@@ -53,12 +44,11 @@ def get_top_tokens():
 
 def format_tweet(top_3_tokens):
     """Format tweet with top 3 tokens - TWOJA ORYGINALNA WERSJA FORMATOWANIA"""
-    # Używamy UTC dla spójności, niezależnie od miejsca uruchomienia skryptu
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M") # Zmieniono na UTC
     
     tweet = f"Top 3 Most Called Tokens (1H)\n\n" 
     
-    if not top_3_tokens: # Dodano obsługę braku tokenów
+    if not top_3_tokens: 
         tweet += "No data available for top called tokens at the moment.\n"
         tweet += "\n#SOL" # Zgodnie z Twoim hashtagiem
         return tweet
@@ -77,21 +67,14 @@ def format_tweet(top_3_tokens):
          # Linia 3: Liczba wywołań (w nowej linii, z wcięciem)
         tweet += f"   {calls} calls\n\n" # Twoje oryginalne "calls calls"
           
-    # Usunięcie ostatniego podwójnego \n jeśli lista tokenów nie była pusta
     if top_3_tokens:
         tweet = tweet.rstrip('\n') + "\n" # Usuwa ostatnie \n\n i dodaje jedno \n
         
-# Add footer with SOL and outlight.fun
     tweet += "\n outlight.fun\n"
-    
-    # Usunięto logikę skracania tweeta - jeśli będzie za długi, Twitter API zwróci błąd.
-    # Możesz dodać własną logikę skracania, jeśli chcesz.
-    # Pamiętaj, że błąd 403 prawdopodobnie nie jest związany z długością.
             
     return tweet
 
 def main():
-    """Główna funkcja bota, przeznaczona do jednorazowego uruchomienia przez GitHub Actions."""
     logging.info("GitHub Action: Bot execution started.")
     
     if not all([api_key, api_secret, access_token, access_token_secret]):
@@ -123,7 +106,6 @@ def main():
     logging.info(f"Prepared tweet ({len(tweet_text)} chars):")
     logging.info(tweet_text)
 
-    # Sprawdzenie długości przed wysłaniem (opcjonalne, ale dobre)
     if len(tweet_text) > 280:
         logging.warning(f"Generated tweet is too long ({len(tweet_text)} chars). Twitter will likely reject it.")
         # Możesz tutaj dodać logikę skracania, jeśli chcesz, lub pozwolić Twitterowi odrzucić.
