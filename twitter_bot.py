@@ -108,8 +108,7 @@ def main():
 
     if len(tweet_text) > 280:
         logging.warning(f"Generated tweet is too long ({len(tweet_text)} chars). Twitter will likely reject it.")
-        # Możesz tutaj dodać logikę skracania, jeśli chcesz, lub pozwolić Twitterowi odrzucić.
-        # Na razie skrypt spróbuje wysłać, aby zobaczyć błąd API Twittera.
+        
 
     try:
         response = client.create_tweet(text=tweet_text)
