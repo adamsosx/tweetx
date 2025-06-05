@@ -50,11 +50,10 @@ def format_tweet(top_3_tokens):
     
     if not top_3_tokens: 
         tweet += "No data available for top called tokens at the moment.\n"
-        tweet += "\n#SOL" # Zgodnie z Twoim hashtagiem
         return tweet
 
     for i, token in enumerate(top_3_tokens, 1):
-        calls = token.get('unique_channels', 0) # Używasz 'unique_channels'
+        calls = token.get('unique_channels', 0) 
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided') 
         
@@ -62,13 +61,13 @@ def format_tweet(top_3_tokens):
         tweet += f"{i}. ${symbol}\n"
         
         # Linia 2: Adres (w nowej linii, z wcięciem)
-        tweet += f"   CA: {address}\n"
+        tweet += f"   {address}\n"
         
          # Linia 3: Liczba wywołań (w nowej linii, z wcięciem)
-        tweet += f"   {calls} calls\n\n" # Twoje oryginalne "calls calls"
+        tweet += f"   {calls} calls\n\n" 
           
     if top_3_tokens:
-        tweet = tweet.rstrip('\n') + "\n" # Usuwa ostatnie \n\n i dodaje jedno \n
+        tweet = tweet.rstrip('\n') + "\n" 
         
     tweet += "\n outlight.fun\n"
             
