@@ -45,12 +45,7 @@ def get_top_tokens():
 def format_tweet(top_3_tokens):
     """Format tweet with top 3 tokens - TWOJA ORYGINALNA WERSJA FORMATOWANIA"""
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M") # Zmieniono na UTC
-    
-    tweet = f"Top 3 Most Called Tokens (1H)\n\n" 
-    
-    if not top_3_tokens: 
-        tweet += "No data available for top called tokens at the moment.\n"
-        return tweet
+    tweet = f"Top 3 Most Called Tokens (1h)\n\n" 
 
     for i, token in enumerate(top_3_tokens, 1):
         calls = token.get('unique_channels', 0) 
