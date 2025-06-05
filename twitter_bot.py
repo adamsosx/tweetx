@@ -56,7 +56,7 @@ def format_tweet(top_3_tokens):
     # Używamy UTC dla spójności, niezależnie od miejsca uruchomienia skryptu
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M") # Zmieniono na UTC
     
-    tweet = f"Top 3 Most Called Tokens (1h) - {timestamp} UTC\n\n" # Dodano UTC do tytułu
+    tweet = f"Top 3 Most Called Tokens (1H)\n\n" 
     
     if not top_3_tokens: # Dodano obsługę braku tokenów
         tweet += "No data available for top called tokens at the moment.\n"
@@ -81,7 +81,8 @@ def format_tweet(top_3_tokens):
     if top_3_tokens:
         tweet = tweet.rstrip('\n') + "\n" # Usuwa ostatnie \n\n i dodaje jedno \n
         
-    tweet += "\n#SOL\n" # Twój oryginalny hashtag
+# Add footer with SOL and outlight.fun
+    tweet += "\n outlight.fun\n"
     
     # Usunięto logikę skracania tweeta - jeśli będzie za długi, Twitter API zwróci błąd.
     # Możesz dodać własną logikę skracania, jeśli chcesz.
