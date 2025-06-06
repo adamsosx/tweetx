@@ -31,7 +31,7 @@ def get_top_tokens():
 
         # Sortujemy tokeny według liczby wywołań w ostatniej godzinie ('calls1h')
         # Zgodnie z RADAR_API_URL timeframe=1h
-        sorted_tokens = sorted(data, key=lambda x: x.get('calls1h', 0), reverse=True)
+        sorted_tokens = sorted(data, key=lambda x: x.get('unique_channels', 0), reverse=True)
 
         # Bierzemy top 3 tokeny
         top_3 = sorted_tokens[:3]
@@ -57,7 +57,7 @@ def format_tweet(top_3_tokens):
 
     for i, token in enumerate(top_3_tokens, 1):
         # Używamy 'calls1h' zgodnie z sortowaniem w get_top_tokens i timeframe URL
-        calls = token.get('calls1h', 0)
+        calls = token.get('unique_channels', 0)
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
 
