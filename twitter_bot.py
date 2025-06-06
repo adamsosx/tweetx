@@ -31,7 +31,7 @@ def get_top_tokens():
 
         # Sortujemy tokeny według liczby wywołań w ostatniej godzinie ('calls1h')
         # Zgodnie z RADAR_API_URL timeframe=1h
-        sorted_tokens = sorted(data, key=lambda x: x.get('unique_channels', 0), reverse=True)
+        sorted_tokens = sorted(data, key=lambda x: x.get('calls1h', 0), reverse=True)
 
         # Bierzemy top 3 tokeny
         top_3 = sorted_tokens[:3]
