@@ -51,34 +51,23 @@ def get_top_tokens():
 
 def format_tweet(top_3_tokens):
     """Format tweet with top 3 tokens"""
-    # Timestamp nie jest używany w tweecie, ale logi mają własne.
-    # Używamy timeframe z RADAR_API_URL
-    tweet = f"Top 3 Most Called Tokens (1h)\n\n"
-
-    for i, token in enumerate(top_3_tokens, 1):
-        # Używamy 'calls1h' zgodnie z sortowaniem w get_top_tokens i timeframe URL
+    tweet = f"🚀Top 3 Most Called Tokens (1h)\n\n"
+    medals = ['🥇', '🥈', '🥉']
+    for i, token in enumerate(top_3_tokens, 0):
         calls = token.get('unique_channels', 0)
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
-
-        # Linia 1: Numer porządkowy, symbol
-        tweet += f"{i}. ${symbol}\n"
-        # Linia 2: Adres (w nowej linii, z wcięciem)
+        medal = medals[i] if i < len(medals) else f"{i+1}."
+        tweet += f"{medal} ${symbol}\n"
         tweet += f"   {address}\n"
-        # Linia 3: Liczba wywołań (w nowej linii, z wcięciem)
         tweet += f"   {calls} calls\n\n"
-
-    # Usuwa ostatnie puste linie dodane przez pętlę
     tweet = tweet.rstrip('\n')
-
-    # Dodajemy informację, że źródło/link będzie w odpowiedzi
     tweet += "\n\nSource 👇"
-
     return tweet
 
 def format_link_tweet():
     """Format the link tweet (reply)"""
-    return "🔗 https://outlight.fun/\n#SOL #Outlight"
+    return "\ud83e\uddea Data from: \ud83d\udd17 https://outlight.fun/\n#SOL #Outlight #TokenCalls "
 
 def main():
     logging.info("GitHub Action: Bot execution started.")
