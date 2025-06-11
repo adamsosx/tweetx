@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone # Dodano timezone dla UTC
 import logging
 import os
+import time
 
 # Dodane do obsługi uploadu grafiki
 from tweepy import OAuth1UserHandler, API
@@ -137,6 +138,9 @@ def main():
             response_main_tweet = client.create_tweet(text=tweet_text)
         main_tweet_id = response_main_tweet.data['id']
         logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}, Link: https://twitter.com/{me.data.username}/status/{main_tweet_id}")
+
+        # --- Opóźnienie przed wysłaniem odpowiedzi ---
+        time.sleep(5)
 
         # --- Dodanie grafiki do odpowiedzi ---
         reply_image_path = os.path.join("images", "msgtwtft.png")
