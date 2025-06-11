@@ -25,45 +25,43 @@ access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
-    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny"""
+    """Zwraca top 3 most called tokeny, licząc tylko kanały z win_rate > 30%"""
     try:
-        # W pierwszym kodzie było verify=False, zachowujemy to z ostrzeżeniem na końcu skryptu
         response = requests.get(OUTLIGHT_API_URL, verify=False)
-        response.raise_for_status()  # Wywoła wyjątek dla kodów błędu HTTP
+        response.raise_for_status()
         data = response.json()
 
-        # Sortujemy tokeny według liczby wywołań w ostatniej godzinie ('calls1h')
-        # Zgodnie z outlight_API_URL timeframe=1h
-        sorted_tokens = sorted(data, key=lambda x: x.get('unique_channels', 0), reverse=True)
+        tokens_with_filtered_calls = []
+        for token in data:
+            channel_calls = token.get('channel_calls', [])
+            # Licz tylko kanały z win_rate > 30%
+            calls_above_30 = [call for call in channel_calls if call.get('win_rate', 0) > 30]
+            count_calls = len(calls_above_30)
+            if count_calls > 0:
+                token_copy = token.copy()
+                token_copy['filtered_calls'] = count_calls
+                tokens_with_filtered_calls.append(token_copy)
 
-        # Bierzemy top 3 tokeny
+        # Sortuj po liczbie filtered_calls malejąco
+        sorted_tokens = sorted(tokens_with_filtered_calls, key=lambda x: x.get('filtered_calls', 0), reverse=True)
         top_3 = sorted_tokens[:3]
         return top_3
-    except requests.exceptions.SSLError as e:
-        logging.error(f"SSL Error fetching data from outlight.fun API: {e}.")
-        return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Request Error fetching data from outlight.fun API: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON Decode Error from outlight.fun API: {e}")
-        return None
     except Exception as e:
         logging.error(f"Unexpected error in get_top_tokens: {e}")
         return None
 
 def format_tweet(top_3_tokens):
-    """Format tweet with top 3 tokens"""
+    """Format tweet with top 3 tokens (tylko calls z win_rate > 30%)"""
     tweet = f"🚀Top 3 Most Called Tokens (1h)\n\n"
     medals = ['🥇', '🥈', '🥉']
     for i, token in enumerate(top_3_tokens, 0):
-        calls = token.get('unique_channels', 0)
+        calls = token.get('filtered_calls', 0)
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
         medal = medals[i] if i < len(medals) else f"{i+1}."
-        tweet += f"{medal} ${symbol}\n"
-        tweet += f"   {address}\n"
-        tweet += f"   {calls} calls\n\n"
+        tweet += f"{medal}${symbol}\n"
+        tweet += f"{address}\n"
+        tweet += f"{calls} calls\n\n"
     tweet = tweet.rstrip('\n')
     return tweet
 
@@ -78,27 +76,7 @@ def main():
         logging.error("CRITICAL: One or more Twitter API keys are missing from environment variables. Exiting.")
         return
 
-    try:
-        # Klient v2 do tweetów tekstowych i odpowiedzi
-        client = tweepy.Client(
-            consumer_key=api_key,
-            consumer_secret=api_secret,
-            access_token=access_token,
-            access_token_secret=access_token_secret
-        )
-        me = client.get_me()
-        logging.info(f"Successfully authenticated on Twitter as @{me.data.username}")
-
-        # Klient v1.1 do uploadu grafiki
-        auth_v1 = OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
-        api_v1 = API(auth_v1)
-    except tweepy.TweepyException as e:
-        logging.error(f"Tweepy Error creating Twitter client or authenticating: {e}")
-        return
-    except Exception as e:
-        logging.error(f"Unexpected error during Twitter client setup: {e}")
-        return
-
+    # 1. Pobierz i przetwórz dane (bez żadnych requestów do Twittera)
     top_3 = get_top_tokens()
     if not top_3: # Obsługuje zarówno None (błąd API) jak i pustą listę (brak tokenów)
         logging.warning("Failed to fetch top tokens or no tokens returned. Skipping tweet.")
@@ -113,7 +91,31 @@ def main():
         # Można dodać return, jeśli nie chcemy próbować wysyłać za długiego tweeta
         # return
 
+    link_tweet_text = format_link_tweet()
+    logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
+    logging.info(link_tweet_text)
+
+    if len(link_tweet_text) > 280:
+        logging.warning(f"Generated reply tweet is too long ({len(link_tweet_text)} chars). Twitter will likely reject it.")
+        # Można zdecydować, czy mimo to próbować wysłać, czy pominąć odpowiedź
+        # return lub continue w pętli (ale tu nie ma pętli)
+
+    # 2. Dopiero teraz połącz się z Twitterem i wyślij tweety
     try:
+        # Klient v2 do tweetów tekstowych i odpowiedzi
+        client = tweepy.Client(
+            consumer_key=api_key,
+            consumer_secret=api_secret,
+            access_token=access_token,
+            access_token_secret=access_token_secret
+        )
+        me = client.get_me()
+        logging.info(f"Successfully authenticated on Twitter as @{me.data.username}")
+
+        # Klient v1.1 do uploadu grafiki
+        auth_v1 = OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
+        api_v1 = API(auth_v1)
+
         # --- Dodanie grafiki do głównego tweeta ---
         image_path = os.path.join("images", "msgtwt.png")
         if not os.path.isfile(image_path):
@@ -135,16 +137,6 @@ def main():
             response_main_tweet = client.create_tweet(text=tweet_text)
         main_tweet_id = response_main_tweet.data['id']
         logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}, Link: https://twitter.com/{me.data.username}/status/{main_tweet_id}")
-
-        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi (z grafiką)
-        link_tweet_text = format_link_tweet()
-        logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
-        logging.info(link_tweet_text)
-
-        if len(link_tweet_text) > 280:
-            logging.warning(f"Generated reply tweet is too long ({len(link_tweet_text)} chars). Twitter will likely reject it.")
-            # Można zdecydować, czy mimo to próbować wysłać, czy pominąć odpowiedź
-            # return lub continue w pętli (ale tu nie ma pętli)
 
         # --- Dodanie grafiki do odpowiedzi ---
         reply_image_path = os.path.join("images", "msgtwtft.png")
