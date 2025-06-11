@@ -22,7 +22,7 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - z pierwszego kodu (1h timeframe)
-OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
+OUTlIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
     """Pobiera dane z API outlight.fun i zwraca top 3 tokeny, które mają przynajmniej jeden channel_call z win_rate > 30"""
@@ -42,6 +42,8 @@ def get_top_tokens():
                 details_resp = requests.get(details_url, verify=False)
                 details_resp.raise_for_status()
                 details = details_resp.json()
+                if isinstance(details, list):
+                    details = details[0] if details else {}
                 channel_calls = details.get('channel_calls', [])
                 # Sprawdź, czy jest przynajmniej jeden channel_call z win_rate > 30
                 if any(call.get('win_rate', 0) > 30 for call in channel_calls):
