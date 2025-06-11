@@ -22,28 +22,28 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - z pierwszego kodu (1h timeframe)
-OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/recent"
+OUTlIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
-    """Zwraca 3 ostatnio wywołane tokeny, które były wywołane przez kanały z win_rate > 30%"""
+    """Zwraca top 3 most called tokeny, licząc tylko kanały z win_rate > 30%"""
     try:
         response = requests.get(OUTLIGHT_API_URL, verify=False)
         response.raise_for_status()
         data = response.json()
 
-        filtered_tokens = []
+        tokens_with_filtered_calls = []
         for token in data:
             channel_calls = token.get('channel_calls', [])
-            # Sprawdź, czy JAKIKOLWIEK channel_call ma win_rate > 30
-            if any(call.get('win_rate', 0) > 30 for call in channel_calls):
-                filtered_tokens.append(token)
+            # Licz tylko kanały z win_rate > 30%
+            calls_above_30 = [call for call in channel_calls if call.get('win_rate', 0) > 30]
+            count_calls = len(calls_above_30)
+            if count_calls > 0:
+                token_copy = token.copy()
+                token_copy['filtered_calls'] = count_calls
+                tokens_with_filtered_calls.append(token_copy)
 
-        # Sortuj po dacie ostatniego wywołania (most_recent_call), malejąco
-        sorted_tokens = sorted(
-            filtered_tokens,
-            key=lambda x: x.get('most_recent_call', ''),
-            reverse=True
-        )
+        # Sortuj po liczbie filtered_calls malejąco
+        sorted_tokens = sorted(tokens_with_filtered_calls, key=lambda x: x.get('filtered_calls', 0), reverse=True)
         top_3 = sorted_tokens[:3]
         return top_3
     except Exception as e:
@@ -51,11 +51,11 @@ def get_top_tokens():
         return None
 
 def format_tweet(top_3_tokens):
-    """Format tweet with top 3 tokens"""
-    tweet = f"🚀Top 3 Most Called Tokens (1h)\n\n"
+    """Format tweet with top 3 tokens (tylko calls z win_rate > 30%)"""
+    tweet = f"🚀Top 3 Most Called Tokens (1h, only channels with win rate > 30%)\n\n"
     medals = ['🥇', '🥈', '🥉']
     for i, token in enumerate(top_3_tokens, 0):
-        calls = token.get('unique_channels', 0)
+        calls = token.get('filtered_calls', 0)
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
         medal = medals[i] if i < len(medals) else f"{i+1}."
