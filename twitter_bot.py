@@ -22,10 +22,10 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - z pierwszego kodu (1h timeframe)
-OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
+OUTlIGHT_API_URL = "https://outlight.fun/api/tokens/recent"
 
 def get_top_tokens():
-    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny, które mają przynajmniej jeden channel_call z win_rate > 30"""
+    """Zwraca 3 ostatnio wywołane tokeny, które były wywołane przez kanały z win_rate > 30%"""
     try:
         response = requests.get(OUTLIGHT_API_URL, verify=False)
         response.raise_for_status()
@@ -33,38 +33,19 @@ def get_top_tokens():
 
         filtered_tokens = []
         for token in data:
-            address = token.get('address')
-            if not address:
-                continue
-            # Pobierz szczegóły tokena
-            details_url = f"https://outlight.fun/api/tokens/{address}"
-            try:
-                details_resp = requests.get(details_url, verify=False)
-                details_resp.raise_for_status()
-                details = details_resp.json()
-                if isinstance(details, list):
-                    details = details[0] if details else {}
-                channel_calls = details.get('channel_calls', [])
-                # Sprawdź, czy jest przynajmniej jeden channel_call z win_rate > 30
-                if any(call.get('win_rate', 0) > 30 for call in channel_calls):
-                    filtered_tokens.append(token)
-            except Exception as e:
-                logging.warning(f"Could not fetch details for token {address}: {e}")
-                continue
+            channel_calls = token.get('channel_calls', [])
+            # Sprawdź, czy JAKIKOLWIEK channel_call ma win_rate > 30
+            if any(call.get('win_rate', 0) > 30 for call in channel_calls):
+                filtered_tokens.append(token)
 
-        # Sortuj po unique_channels malejąco
-        sorted_tokens = sorted(filtered_tokens, key=lambda x: x.get('unique_channels', 0), reverse=True)
+        # Sortuj po dacie ostatniego wywołania (most_recent_call), malejąco
+        sorted_tokens = sorted(
+            filtered_tokens,
+            key=lambda x: x.get('most_recent_call', ''),
+            reverse=True
+        )
         top_3 = sorted_tokens[:3]
         return top_3
-    except requests.exceptions.SSLError as e:
-        logging.error(f"SSL Error fetching data from outlight.fun API: {e}.")
-        return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Request Error fetching data from outlight.fun API: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON Decode Error from outlight.fun API: {e}")
-        return None
     except Exception as e:
         logging.error(f"Unexpected error in get_top_tokens: {e}")
         return None
