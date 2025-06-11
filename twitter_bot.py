@@ -22,21 +22,36 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - z pierwszego kodu (1h timeframe)
-OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
+OUTlIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
-    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny"""
+    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny, które mają przynajmniej jeden channel_call z win_rate > 30"""
     try:
-        # W pierwszym kodzie było verify=False, zachowujemy to z ostrzeżeniem na końcu skryptu
         response = requests.get(OUTLIGHT_API_URL, verify=False)
-        response.raise_for_status()  # Wywoła wyjątek dla kodów błędu HTTP
+        response.raise_for_status()
         data = response.json()
 
-        # Sortujemy tokeny według liczby wywołań w ostatniej godzinie ('calls1h')
-        # Zgodnie z outlight_API_URL timeframe=1h
-        sorted_tokens = sorted(data, key=lambda x: x.get('unique_channels', 0), reverse=True)
+        filtered_tokens = []
+        for token in data:
+            address = token.get('address')
+            if not address:
+                continue
+            # Pobierz szczegóły tokena
+            details_url = f"https://outlight.fun/api/tokens/{address}"
+            try:
+                details_resp = requests.get(details_url, verify=False)
+                details_resp.raise_for_status()
+                details = details_resp.json()
+                channel_calls = details.get('channel_calls', [])
+                # Sprawdź, czy jest przynajmniej jeden channel_call z win_rate > 30
+                if any(call.get('win_rate', 0) > 30 for call in channel_calls):
+                    filtered_tokens.append(token)
+            except Exception as e:
+                logging.warning(f"Could not fetch details for token {address}: {e}")
+                continue
 
-        # Bierzemy top 3 tokeny
+        # Sortuj po unique_channels malejąco
+        sorted_tokens = sorted(filtered_tokens, key=lambda x: x.get('unique_channels', 0), reverse=True)
         top_3 = sorted_tokens[:3]
         return top_3
     except requests.exceptions.SSLError as e:
