@@ -4,7 +4,6 @@ import json
 from datetime import datetime, timezone # Dodano timezone dla UTC
 import logging
 import os
-import time
 
 # Dodane do obsługi uploadu grafiki
 from tweepy import OAuth1UserHandler, API
@@ -26,7 +25,7 @@ access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
-    """Zwraca top 3 most called tokeny, licząc tylko kanały z win_rate > 30%"""
+    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny, licząc tylko kanały z win_rate > 30%"""
     try:
         response = requests.get(OUTLIGHT_API_URL, verify=False)
         response.raise_for_status()
@@ -77,31 +76,6 @@ def main():
         logging.error("CRITICAL: One or more Twitter API keys are missing from environment variables. Exiting.")
         return
 
-    # 1. Pobierz i przetwórz dane (bez żadnych requestów do Twittera)
-    top_3 = get_top_tokens()
-    if not top_3: # Obsługuje zarówno None (błąd API) jak i pustą listę (brak tokenów)
-        logging.warning("Failed to fetch top tokens or no tokens returned. Skipping tweet.")
-        return
-
-    tweet_text = format_tweet(top_3)
-    logging.info(f"Prepared main tweet ({len(tweet_text)} chars):")
-    logging.info(tweet_text)
-
-    if len(tweet_text) > 280:
-        logging.warning(f"Generated main tweet is too long ({len(tweet_text)} chars). Twitter will likely reject it.")
-        # Można dodać return, jeśli nie chcemy próbować wysyłać za długiego tweeta
-        # return
-
-    link_tweet_text = format_link_tweet()
-    logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
-    logging.info(link_tweet_text)
-
-    if len(link_tweet_text) > 280:
-        logging.warning(f"Generated reply tweet is too long ({len(link_tweet_text)} chars). Twitter will likely reject it.")
-        # Można zdecydować, czy mimo to próbować wysłać, czy pominąć odpowiedź
-        # return lub continue w pętli (ale tu nie ma pętli)
-
-    # 2. Dopiero teraz połącz się z Twitterem i wyślij tweety
     try:
         # Klient v2 do tweetów tekstowych i odpowiedzi
         client = tweepy.Client(
@@ -116,7 +90,28 @@ def main():
         # Klient v1.1 do uploadu grafiki
         auth_v1 = OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
         api_v1 = API(auth_v1)
+    except tweepy.TweepyException as e:
+        logging.error(f"Tweepy Error creating Twitter client or authenticating: {e}")
+        return
+    except Exception as e:
+        logging.error(f"Unexpected error during Twitter client setup: {e}")
+        return
 
+    top_3 = get_top_tokens()
+    if not top_3: # Obsługuje zarówno None (błąd API) jak i pustą listę (brak tokenów)
+        logging.warning("Failed to fetch top tokens or no tokens returned. Skipping tweet.")
+        return
+
+    tweet_text = format_tweet(top_3)
+    logging.info(f"Prepared main tweet ({len(tweet_text)} chars):")
+    logging.info(tweet_text)
+
+    if len(tweet_text) > 280:
+        logging.warning(f"Generated main tweet is too long ({len(tweet_text)} chars). Twitter will likely reject it.")
+        # Można dodać return, jeśli nie chcemy próbować wysyłać za długiego tweeta
+        # return
+
+    try:
         # --- Dodanie grafiki do głównego tweeta ---
         image_path = os.path.join("images", "msgtwt.png")
         if not os.path.isfile(image_path):
@@ -139,8 +134,15 @@ def main():
         main_tweet_id = response_main_tweet.data['id']
         logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}, Link: https://twitter.com/{me.data.username}/status/{main_tweet_id}")
 
-        # --- Opóźnienie przed wysłaniem odpowiedzi ---
-        time.sleep(5)
+        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi (z grafiką)
+        link_tweet_text = format_link_tweet()
+        logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
+        logging.info(link_tweet_text)
+
+        if len(link_tweet_text) > 280:
+            logging.warning(f"Generated reply tweet is too long ({len(link_tweet_text)} chars). Twitter will likely reject it.")
+            # Można zdecydować, czy mimo to próbować wysłać, czy pominąć odpowiedź
+            # return lub continue w pętli (ale tu nie ma pętli)
 
         # --- Dodanie grafiki do odpowiedzi ---
         reply_image_path = os.path.join("images", "msgtwtft.png")
