@@ -25,43 +25,45 @@ access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
-    """Zwraca top 3 most called tokeny, licząc tylko kanały z win_rate > 30%"""
+    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny"""
     try:
+        # W pierwszym kodzie było verify=False, zachowujemy to z ostrzeżeniem na końcu skryptu
         response = requests.get(OUTLIGHT_API_URL, verify=False)
-        response.raise_for_status()
+        response.raise_for_status()  # Wywoła wyjątek dla kodów błędu HTTP
         data = response.json()
 
-        tokens_with_filtered_calls = []
-        for token in data:
-            channel_calls = token.get('channel_calls', [])
-            # Licz tylko kanały z win_rate > 30%
-            calls_above_30 = [call for call in channel_calls if call.get('win_rate', 0) > 30]
-            count_calls = len(calls_above_30)
-            if count_calls > 0:
-                token_copy = token.copy()
-                token_copy['filtered_calls'] = count_calls
-                tokens_with_filtered_calls.append(token_copy)
+        # Sortujemy tokeny według liczby wywołań w ostatniej godzinie ('calls1h')
+        # Zgodnie z outlight_API_URL timeframe=1h
+        sorted_tokens = sorted(data, key=lambda x: x.get('unique_channels', 0), reverse=True)
 
-        # Sortuj po liczbie filtered_calls malejąco
-        sorted_tokens = sorted(tokens_with_filtered_calls, key=lambda x: x.get('filtered_calls', 0), reverse=True)
+        # Bierzemy top 3 tokeny
         top_3 = sorted_tokens[:3]
         return top_3
+    except requests.exceptions.SSLError as e:
+        logging.error(f"SSL Error fetching data from outlight.fun API: {e}.")
+        return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request Error fetching data from outlight.fun API: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON Decode Error from outlight.fun API: {e}")
+        return None
     except Exception as e:
         logging.error(f"Unexpected error in get_top_tokens: {e}")
         return None
 
 def format_tweet(top_3_tokens):
-    """Format tweet with top 3 tokens (tylko calls z win_rate > 30%)"""
+    """Format tweet with top 3 tokens"""
     tweet = f"🚀Top 3 Most Called Tokens (1h)\n\n"
     medals = ['🥇', '🥈', '🥉']
     for i, token in enumerate(top_3_tokens, 0):
-        calls = token.get('filtered_calls', 0)
+        calls = token.get('unique_channels', 0)
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
         medal = medals[i] if i < len(medals) else f"{i+1}."
-        tweet += f"{medal}${symbol}\n"
-        tweet += f"{address}\n"
-        tweet += f"{calls} calls\n\n"
+        tweet += f"{medal} ${symbol}\n"
+        tweet += f"   {address}\n"
+        tweet += f"   {calls} calls\n\n"
     tweet = tweet.rstrip('\n')
     return tweet
 
