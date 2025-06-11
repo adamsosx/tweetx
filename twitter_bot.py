@@ -19,7 +19,7 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API radar.fun - z pierwszego kodu (1h timeframe)
-RADAR_API_URL = "https://radar.fun/api/tokens/most-called?timeframe=1h"
+RADAR_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
     """Pobiera dane z API radar.fun i zwraca top 3 tokeny"""
