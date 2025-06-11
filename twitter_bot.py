@@ -5,6 +5,9 @@ from datetime import datetime, timezone # Dodano timezone dla UTC
 import logging
 import os
 
+# Dodane do obsługi uploadu grafiki
+from tweepy import OAuth1UserHandler, API
+
 # Konfiguracja logowania
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +80,7 @@ def main():
         return
 
     try:
+        # Klient v2 do tweetów tekstowych i odpowiedzi
         client = tweepy.Client(
             consumer_key=api_key,
             consumer_secret=api_secret,
@@ -85,6 +89,10 @@ def main():
         )
         me = client.get_me()
         logging.info(f"Successfully authenticated on Twitter as @{me.data.username}")
+
+        # Klient v1.1 do uploadu grafiki
+        auth_v1 = OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
+        api_v1 = API(auth_v1)
     except tweepy.TweepyException as e:
         logging.error(f"Tweepy Error creating Twitter client or authenticating: {e}")
         return
@@ -107,12 +115,29 @@ def main():
         # return
 
     try:
-        # Wysyłanie głównego tweeta
-        response_main_tweet = client.create_tweet(text=tweet_text)
+        # --- Dodanie grafiki do głównego tweeta ---
+        image_path = os.path.join("images", "msgtwt.png")
+        if not os.path.isfile(image_path):
+            logging.error(f"Image file not found: {image_path}. Sending tweet without image.")
+            media_id = None
+        else:
+            try:
+                media = api_v1.media_upload(image_path)
+                media_id = media.media_id
+                logging.info(f"Image uploaded successfully. Media ID: {media_id}")
+            except Exception as e:
+                logging.error(f"Error uploading image: {e}. Sending tweet without image.")
+                media_id = None
+
+        # Wysyłanie głównego tweeta z grafiką (jeśli się udało)
+        if media_id:
+            response_main_tweet = client.create_tweet(text=tweet_text, media_ids=[media_id])
+        else:
+            response_main_tweet = client.create_tweet(text=tweet_text)
         main_tweet_id = response_main_tweet.data['id']
         logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}, Link: https://twitter.com/{me.data.username}/status/{main_tweet_id}")
 
-        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi
+        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi (bez grafiki)
         link_tweet_text = format_link_tweet()
         logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
         logging.info(link_tweet_text)
