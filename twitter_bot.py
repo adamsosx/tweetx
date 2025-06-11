@@ -22,7 +22,7 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - z pierwszego kodu (1h timeframe)
-OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
+OUTlIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
     """Pobiera dane z API outlight.fun i zwraca top 3 tokeny"""
@@ -65,7 +65,6 @@ def format_tweet(top_3_tokens):
         tweet += f"   {address}\n"
         tweet += f"   {calls} calls\n\n"
     tweet = tweet.rstrip('\n')
-    tweet += "\n\nSource 👇"
     return tweet
 
 def format_link_tweet():
@@ -137,7 +136,7 @@ def main():
         main_tweet_id = response_main_tweet.data['id']
         logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}, Link: https://twitter.com/{me.data.username}/status/{main_tweet_id}")
 
-        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi (bez grafiki)
+        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi (z grafiką)
         link_tweet_text = format_link_tweet()
         logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
         logging.info(link_tweet_text)
@@ -147,10 +146,31 @@ def main():
             # Można zdecydować, czy mimo to próbować wysłać, czy pominąć odpowiedź
             # return lub continue w pętli (ale tu nie ma pętli)
 
-        response_reply_tweet = client.create_tweet(
-            text=link_tweet_text,
-            in_reply_to_tweet_id=main_tweet_id
-        )
+        # --- Dodanie grafiki do odpowiedzi ---
+        reply_image_path = os.path.join("images", "msgtwtft.png")
+        if not os.path.isfile(reply_image_path):
+            logging.error(f"Reply image file not found: {reply_image_path}. Sending reply without image.")
+            reply_media_id = None
+        else:
+            try:
+                reply_media = api_v1.media_upload(reply_image_path)
+                reply_media_id = reply_media.media_id
+                logging.info(f"Reply image uploaded successfully. Media ID: {reply_media_id}")
+            except Exception as e:
+                logging.error(f"Error uploading reply image: {e}. Sending reply without image.")
+                reply_media_id = None
+
+        if reply_media_id:
+            response_reply_tweet = client.create_tweet(
+                text=link_tweet_text,
+                in_reply_to_tweet_id=main_tweet_id,
+                media_ids=[reply_media_id]
+            )
+        else:
+            response_reply_tweet = client.create_tweet(
+                text=link_tweet_text,
+                in_reply_to_tweet_id=main_tweet_id
+            )
         reply_tweet_id = response_reply_tweet.data['id']
         logging.info(f"Reply tweet sent successfully! Tweet ID: {reply_tweet_id}, Link: https://twitter.com/{me.data.username}/status/{reply_tweet_id}")
 
