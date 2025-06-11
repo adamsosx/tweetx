@@ -18,32 +18,32 @@ api_secret = os.getenv("TWITTER_API_SECRET")
 access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
-# URL API radar.fun - z pierwszego kodu (1h timeframe)
-RADAR_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
+# URL API outlight.fun - z pierwszego kodu (1h timeframe)
+OUTlIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
-    """Pobiera dane z API radar.fun i zwraca top 3 tokeny"""
+    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny"""
     try:
         # W pierwszym kodzie było verify=False, zachowujemy to z ostrzeżeniem na końcu skryptu
-        response = requests.get(RADAR_API_URL, verify=False)
+        response = requests.get(OUTLIGHT_API_URL, verify=False)
         response.raise_for_status()  # Wywoła wyjątek dla kodów błędu HTTP
         data = response.json()
 
         # Sortujemy tokeny według liczby wywołań w ostatniej godzinie ('calls1h')
-        # Zgodnie z RADAR_API_URL timeframe=1h
+        # Zgodnie z outlight_API_URL timeframe=1h
         sorted_tokens = sorted(data, key=lambda x: x.get('unique_channels', 0), reverse=True)
 
         # Bierzemy top 3 tokeny
         top_3 = sorted_tokens[:3]
         return top_3
     except requests.exceptions.SSLError as e:
-        logging.error(f"SSL Error fetching data from radar.fun API: {e}.")
+        logging.error(f"SSL Error fetching data from outlight.fun API: {e}.")
         return None
     except requests.exceptions.RequestException as e:
-        logging.error(f"Request Error fetching data from radar.fun API: {e}")
+        logging.error(f"Request Error fetching data from outlight.fun API: {e}")
         return None
     except json.JSONDecodeError as e:
-        logging.error(f"JSON Decode Error from radar.fun API: {e}")
+        logging.error(f"JSON Decode Error from outlight.fun API: {e}")
         return None
     except Exception as e:
         logging.error(f"Unexpected error in get_top_tokens: {e}")
