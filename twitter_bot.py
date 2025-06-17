@@ -59,10 +59,10 @@ def format_tweet(top_3_tokens):
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
         medal = medals[i] if i < len(medals) else f"{i+1}."
-        tweet += f"{medal}${symbol}\n"
+        tweet += f"{medal} ${symbol}\n"
         tweet += f"{address}\n"
-        tweet += f"{calls} \n\n"
-        tweet = tweet.rstrip('\n') + '\n\n'  # Dodajemy dodatkową pustą linię na końcu
+        tweet += f"📞 {calls}\n\n"
+    tweet = tweet.rstrip('\n') + '\n\n'
     return tweet
 
 def format_link_tweet():
