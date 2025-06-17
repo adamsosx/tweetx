@@ -61,7 +61,7 @@ def format_tweet(top_3_tokens):
         medal = medals[i] if i < len(medals) else f"{i+1}."
         tweet += f"{medal}${symbol}\n"
         tweet += f"{address}\n"
-        tweet += f"{calls} calls\n\n"
+        tweet += f"{calls} \n\n"
         tweet = tweet.rstrip('\n') + '\n\n'  # Dodajemy dodatkową pustą linię na końcu
     return tweet
 
