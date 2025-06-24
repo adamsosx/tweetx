@@ -227,7 +227,8 @@ def main():
         )
         
         if not main_tweet_response:
-            logging.error("❌ Nie udało się wysłać głównego tweeta mimo pomyślnego uploadu grafiki")
+            logging.error("❌ KRYTYCZNY BŁĄD: Nie udało się wysłać głównego tweeta!")
+            logging.error("ANULOWANIE: Nie będzie wysyłana odpowiedź, bo główny tweet się nie udał.")
             return
             
         main_tweet_id = main_tweet_response.data['id']
@@ -238,8 +239,10 @@ def main():
         logging.info("Oczekiwanie 180 sekund przed wysłaniem odpowiedzi...")
         time.sleep(180)
         
-        # KROK 4: Wysłanie odpowiedzi (już z gwarancją grafiki)
+        # KROK 4: Wysłanie odpowiedzi (tylko jeśli główny tweet się udał)
         logging.info("=== KROK 4: Wysyłanie tweeta odpowiedzi z grafiką ===")
+        logging.info("Główny tweet został wysłany pomyślnie - kontynuowanie z odpowiedzią...")
+        
         reply_response = safe_tweet_with_retry(
             client,
             link_tweet_text,
@@ -250,8 +253,11 @@ def main():
         if reply_response:
             logging.info(f"✅ Odpowiedź wysłana z grafiką! ID: {reply_response.data['id']}")
             logging.info("🎉 PEŁNY SUKCES: Oba tweety wysłane z grafikami!")
+            logging.info(f"   🔗 Główny tweet: https://x.com/user/status/{main_tweet_id}")
+            logging.info(f"   🔗 Odpowiedź: https://x.com/user/status/{reply_response.data['id']}")
         else:
             logging.error("❌ Nie udało się wysłać odpowiedzi mimo pomyślnego uploadu grafiki")
+            logging.error(f"Główny tweet został jednak wysłany: https://x.com/user/status/{main_tweet_id}")
 
     except Exception as e:
         logging.error(f"Nieoczekiwany błąd podczas procesu: {e}")
