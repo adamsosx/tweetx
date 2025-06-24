@@ -42,7 +42,6 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 
-
 # URL API outlight.fun - z pierwszego kodu (1h timeframe)
 
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
@@ -269,9 +268,9 @@ def main():
 
 
 
-        # Wait at least 60 seconds before sending reply
+        # Wait at least 150 seconds (2.5 minutes) before sending reply
 
-        time.sleep(120)
+        time.sleep(150)
 
 
 
@@ -405,30 +404,36 @@ if __name__ == "__main__":
 
 def create_tweets_with_rate_limit(client, tweets_to_send):
     """
-    Send tweets with proper rate limiting
+    Send tweets with proper rate limiting for Basic tier
+    - Basic tier allows 50 tweets/24hr
+    - Maximum 1 tweet per 2 minutes
     """
     for tweet in tweets_to_send:
         try:
             response = client.create_tweet(text=tweet)
             print(f"Tweet sent successfully: {response.data['id']}")
-            # Wait at least 60 seconds between tweets to avoid rate limits
-            time.sleep(60)  # 60 seconds = 1 minute
+            # Wait 150 seconds (2.5 minutes) between tweets to be safe
+            # This provides a buffer over the 2-minute requirement
+            time.sleep(150)  
         except tweepy.TooManyRequests as e:
-            # Get the reset time from the error response
             reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
             current_time = int(time.time())
-            # Calculate wait time (add 10 seconds buffer)
-            wait_time = max(reset_time - current_time + 10, 60)
+            # Calculate wait time and add a 5-minute buffer
+            wait_time = max(reset_time - current_time + 300, 300)
             
-            print(f"Rate limit exceeded. Waiting {wait_time} seconds")
+            print(f"Rate limit exceeded. Waiting {wait_time} seconds before retrying")
             time.sleep(wait_time)
             # Retry the tweet after waiting
             try:
                 response = client.create_tweet(text=tweet)
                 print(f"Tweet sent successfully after waiting: {response.data['id']}")
+                # Still maintain the regular delay after a successful retry
+                time.sleep(150)
             except Exception as retry_e:
                 print(f"Failed to send tweet even after waiting: {retry_e}")
+                # If we fail again, we should probably stop and alert
+                raise retry_e
         except Exception as e:
             print(f"Error sending tweet: {e}")
-            # Wait before trying the next tweet anyway
-            time.sleep(60)
+            # For non-rate-limit errors, wait standard delay before next attempt
+            time.sleep(150)
