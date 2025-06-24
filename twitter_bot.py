@@ -271,7 +271,7 @@ def main():
 
         # Wait at least 60 seconds before sending reply
 
-        time.sleep(60)
+        time.sleep(120)
 
 
 
