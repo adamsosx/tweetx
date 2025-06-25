@@ -237,28 +237,24 @@ def generate_ai_tweet(top_3_tokens):
         total_calls = sum(token.get('filtered_calls', 0) for token in top_3_tokens)
         
         # Create prompt for OpenAI
-        prompt = f"""You are a crypto analyst creating a Twitter thread about the most called tokens in the last hour. 
+        system_prompt = """You are a crypto analyst responding in crypto style, in English. Use crypto slang, emojis, and engaging language that resonates with the crypto community. Be professional but use terms like 'pumping', 'calls', 'gems', 'alpha', etc. Keep it authentic to crypto Twitter culture."""
+        
+        prompt = f"""Create an engaging crypto Twitter post about the most called tokens in the last hour.
 
 DATA FROM OUTLIGHT.FUN:
 {data_summary}
 
 Total calls tracked: {total_calls}
 
-Create 2 tweets:
-1. MAIN TWEET: Engaging announcement about top 3 most called tokens (max 250 chars)
-2. REPLY TWEET: Short conclusion with link to outlight.fun (max 250 chars)
-
-Rules:
-- Use emojis appropriately 
-- Keep it professional but engaging
-- Focus on the data insights
-- Don't use too many hashtags
-- Make it sound natural, not robotic
+Create 1 tweet only:
+- Engaging announcement about top 3 most called tokens (max 270 chars)
+- Use crypto slang and style
+- Include relevant emojis
+- Focus on the data insights  
 - Include token symbols with $ prefix
+- Make it sound natural and engaging for crypto Twitter
 
-Format your response as:
-MAIN_TWEET: [your main tweet here]
-REPLY_TWEET: [your reply tweet here]"""
+Format your response as just the tweet text, no labels needed."""
 
         logging.info("Generating AI tweets...")
         
@@ -269,11 +265,11 @@ REPLY_TWEET: [your reply tweet here]"""
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a professional crypto analyst who creates engaging Twitter content about token data."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=400,
-                temperature=0.7
+                max_tokens=300,
+                temperature=0.8
             )
             ai_response = response.choices[0].message.content.strip()
         else:
@@ -281,55 +277,45 @@ REPLY_TWEET: [your reply tweet here]"""
             response = openai_client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a professional crypto analyst who creates engaging Twitter content about token data."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=400,
-                temperature=0.7
+                max_tokens=300,
+                temperature=0.8
             )
             ai_response = response.choices[0].message.content.strip()
         
         logging.info(f"AI Response received: {len(ai_response)} characters")
         
-        # Parse the response
-        lines = ai_response.split('\n')
-        main_tweet = ""
-        reply_tweet = ""
+        # Clean up the response (remove any formatting artifacts)
+        main_tweet = ai_response.strip()
         
-        for line in lines:
-            if line.startswith("MAIN_TWEET:"):
-                main_tweet = line.replace("MAIN_TWEET:", "").strip()
-            elif line.startswith("REPLY_TWEET:"):
-                reply_tweet = line.replace("REPLY_TWEET:", "").strip()
-        
-        # Fallback if parsing failed
-        if not main_tweet or not reply_tweet:
-            logging.warning("Failed to parse AI response, using fallback")
-            return format_tweet(top_3_tokens), format_link_tweet()
+        # Remove any potential labels that might slip through
+        if main_tweet.startswith("MAIN_TWEET:"):
+            main_tweet = main_tweet.replace("MAIN_TWEET:", "").strip()
+        if main_tweet.startswith("Tweet:"):
+            main_tweet = main_tweet.replace("Tweet:", "").strip()
         
         # Validate length
         if len(main_tweet) > 280:
             main_tweet = main_tweet[:277] + "..."
             logging.warning(f"Main tweet truncated to {len(main_tweet)} characters")
         
-        if len(reply_tweet) > 280:
-            reply_tweet = reply_tweet[:277] + "..."
-            logging.warning(f"Reply tweet truncated to {len(reply_tweet)} characters")
+        if not main_tweet:
+            logging.warning("Empty AI response, using fallback")
+            return format_tweet(top_3_tokens)
         
-        logging.info(f"✅ AI tweets generated successfully!")
-        logging.info(f"   - Main tweet: {len(main_tweet)} chars")
-        logging.info(f"   - Reply tweet: {len(reply_tweet)} chars")
+        logging.info(f"✅ AI tweet generated successfully!")
+        logging.info(f"   - Tweet: {len(main_tweet)} chars")
         
-        return main_tweet, reply_tweet
+        return main_tweet
         
     except Exception as e:
         logging.error(f"Error generating AI tweets: {e}")
         logging.warning("Falling back to template tweets...")
         
         # Fallback to original format if AI fails
-        main_tweet = format_tweet(top_3_tokens)
-        reply_tweet = format_link_tweet()
-        return main_tweet, reply_tweet
+        return format_tweet(top_3_tokens)
 
 def format_link_tweet():
     """Format link tweet with variability to avoid spam detection"""
@@ -404,32 +390,23 @@ def main():
 
     # Generate AI tweets or use fallback
     if openai_client:
-        logging.info("=== GENERATING AI TWEETS ===")
-        tweet_text, link_tweet_text = generate_ai_tweet(top_3)
+        logging.info("=== GENERATING AI TWEET ===")
+        tweet_text = generate_ai_tweet(top_3)
     else:
-        logging.info("=== USING TEMPLATE TWEETS ===")
+        logging.info("=== USING TEMPLATE TWEET ===")
         tweet_text = format_tweet(top_3)
-        link_tweet_text = format_link_tweet()
     
     # Validate length BEFORE any uploads
     if len(tweet_text) > 280:
         logging.error(f"Main tweet too long ({len(tweet_text)} characters). CANCELING.")
         return
-    
-    if len(link_tweet_text) > 280:
-        logging.error(f"Reply tweet too long ({len(link_tweet_text)} characters). CANCELING.")
-        return
 
-    logging.info(f"📝 Final tweets prepared:")
-    logging.info(f"   Main: {len(tweet_text)} chars")
-    logging.info(f"   Reply: {len(link_tweet_text)} chars")
+    logging.info(f"📝 Final tweet prepared:")
+    logging.info(f"   Tweet: {len(tweet_text)} chars")
 
     try:
         # STEP 1: Upload ALL images at the beginning
         logging.info("=== STEP 1: Uploading all images ===")
-        
-        main_image_path = os.path.join("images", "msgtwt.png")
-        reply_image_path = os.path.join("images", "msgtwtft.png")
         
         # Upload first image
         logging.info("Uploading main tweet image...")
@@ -439,19 +416,9 @@ def main():
             logging.error("❌ CRITICAL ERROR: Failed to upload main image.")
             logging.error("CANCELING entire process - no tweets will be sent without images.")
             return
-        
-        # Upload second image
-        logging.info("Uploading reply tweet image...")
-        reply_media_id = safe_media_upload(api_v1, reply_image_path)
-        
-        if not reply_media_id:
-            logging.error("❌ CRITICAL ERROR: Failed to upload reply image.")
-            logging.error("CANCELING entire process - no tweets will be sent without images.")
-            return
             
-        logging.info("✅ SUCCESS: All images uploaded successfully!")
+        logging.info("✅ SUCCESS: Image uploaded successfully!")
         logging.info(f"   - Main image: Media ID {main_media_id}")
-        logging.info(f"   - Reply image: Media ID {reply_media_id}")
         
         # STEP 2: Send main tweet (with image guarantee)
         logging.info("=== STEP 2: Sending main tweet with image ===")
@@ -463,36 +430,12 @@ def main():
         
         if not main_tweet_response:
             logging.error("❌ CRITICAL ERROR: Failed to send main tweet!")
-            logging.error("CANCELING: Reply will not be sent since main tweet failed.")
             return
             
         main_tweet_id = main_tweet_response.data['id']
         logging.info(f"✅ Main tweet sent with image! ID: {main_tweet_id}")
-        
-        # STEP 3: Safe waiting before reply
-        logging.info("=== STEP 3: Waiting before reply ===")
-        logging.info("Waiting 180 seconds before sending reply...")
-        time.sleep(180)
-        
-        # STEP 4: Send reply (only if main tweet succeeded)
-        logging.info("=== STEP 4: Sending reply tweet with image ===")
-        logging.info("Main tweet sent successfully - proceeding with reply...")
-        
-        reply_response = safe_tweet_with_retry(
-            client,
-            link_tweet_text,
-            media_ids=[reply_media_id],
-            in_reply_to_tweet_id=main_tweet_id
-        )
-        
-        if reply_response:
-            logging.info(f"✅ Reply sent with image! ID: {reply_response.data['id']}")
-            logging.info("🎉 FULL SUCCESS: Both tweets sent with images!")
-            logging.info(f"   🔗 Main tweet: https://x.com/user/status/{main_tweet_id}")
-            logging.info(f"   🔗 Reply: https://x.com/user/status/{reply_response.data['id']}")
-        else:
-            logging.error("❌ Failed to send reply despite successful image upload")
-            logging.error(f"Main tweet was sent though: https://x.com/user/status/{main_tweet_id}")
+        logging.info("🎉 SUCCESS: Tweet sent successfully!")
+        logging.info(f"   🔗 Tweet: https://x.com/user/status/{main_tweet_id}")
 
     except Exception as e:
         logging.error(f"Unexpected error during process: {e}")
