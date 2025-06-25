@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import logging
 import os
 from tweepy import OAuth1UserHandler, API
+import openai
 
 # Logging configuration
 logging.basicConfig(
@@ -19,6 +20,10 @@ api_key = os.getenv("TWITTER_API_KEY")
 api_secret = os.getenv("TWITTER_API_SECRET")
 access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+
+# Initialize OpenAI
+openai.api_key = openai_api_key
 
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
@@ -126,20 +131,93 @@ def get_top_tokens():
         logging.error(f"Error fetching data from API: {e}")
         return None
 
-def format_tweet(top_3_tokens):
-    """Format main tweet"""
-    tweet = f"🚀Top 3 Most 📞 1h\n\n"
-    medals = ['🥇', '🥈', '🥉']
-    for i, token in enumerate(top_3_tokens, 0):
-        calls = token.get('filtered_calls', 0)
-        symbol = token.get('symbol', 'Unknown')
-        address = token.get('address', 'No Address Provided')
-        medal = medals[i] if i < len(medals) else f"{i+1}."
-        tweet += f"{medal} ${symbol}\n"
-        tweet += f"{address}\n"
-        tweet += f"📞 {calls}\n\n"
-    tweet = tweet.rstrip('\n') + '\n\n'
-    return tweet
+def generate_ai_tweet(top_3_tokens):
+    """Generate intelligent tweet using OpenAI based on token data"""
+    try:
+        # Prepare data for AI
+        token_data = []
+        for i, token in enumerate(top_3_tokens, 1):
+            calls = token.get('filtered_calls', 0)
+            symbol = token.get('symbol', 'Unknown')
+            address = token.get('address', 'No Address')[:8] + "..."  # Shorten address
+            token_data.append(f"{i}. ${symbol} - {calls} calls - {address}")
+        
+        data_summary = "\n".join(token_data)
+        total_calls = sum(token.get('filtered_calls', 0) for token in top_3_tokens)
+        
+        # Create prompt for OpenAI
+        prompt = f"""You are a crypto analyst creating a Twitter thread about the most called tokens in the last hour. 
+
+DATA FROM OUTLIGHT.FUN:
+{data_summary}
+
+Total calls tracked: {total_calls}
+
+Create 2 tweets:
+1. MAIN TWEET: Engaging announcement about top 3 most called tokens (max 250 chars)
+2. REPLY TWEET: Short conclusion with link to outlight.fun (max 250 chars)
+
+Rules:
+- Use emojis appropriately 
+- Keep it professional but engaging
+- Focus on the data insights
+- Don't use too many hashtags
+- Make it sound natural, not robotic
+- Include token symbols with $ prefix
+
+Format your response as:
+MAIN_TWEET: [your main tweet here]
+REPLY_TWEET: [your reply tweet here]"""
+
+        logging.info("Generating AI tweets...")
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a professional crypto analyst who creates engaging Twitter content about token data."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=400,
+            temperature=0.7
+        )
+        
+        ai_response = response.choices[0].message.content.strip()
+        logging.info(f"AI Response received: {len(ai_response)} characters")
+        
+        # Parse the response
+        lines = ai_response.split('\n')
+        main_tweet = ""
+        reply_tweet = ""
+        
+        for line in lines:
+            if line.startswith("MAIN_TWEET:"):
+                main_tweet = line.replace("MAIN_TWEET:", "").strip()
+            elif line.startswith("REPLY_TWEET:"):
+                reply_tweet = line.replace("REPLY_TWEET:", "").strip()
+        
+        # Validate length
+        if len(main_tweet) > 280:
+            main_tweet = main_tweet[:277] + "..."
+            logging.warning(f"Main tweet truncated to {len(main_tweet)} characters")
+        
+        if len(reply_tweet) > 280:
+            reply_tweet = reply_tweet[:277] + "..."
+            logging.warning(f"Reply tweet truncated to {len(reply_tweet)} characters")
+        
+        logging.info(f"✅ AI tweets generated successfully!")
+        logging.info(f"   - Main tweet: {len(main_tweet)} chars")
+        logging.info(f"   - Reply tweet: {len(reply_tweet)} chars")
+        
+        return main_tweet, reply_tweet
+        
+    except Exception as e:
+        logging.error(f"Error generating AI tweets: {e}")
+        logging.warning("Falling back to template tweets...")
+        
+        # Fallback to original format if AI fails
+        main_tweet = format_tweet(top_3_tokens)
+        reply_tweet = format_link_tweet()
+        return main_tweet, reply_tweet
 
 def format_link_tweet():
     """Format link tweet with variability to avoid spam detection"""
@@ -182,8 +260,11 @@ def main():
     logging.info("GitHub Action: Bot execution started.")
 
     if not all([api_key, api_secret, access_token, access_token_secret]):
-        logging.error("Missing required API keys. Terminating.")
+        logging.error("Missing required Twitter API keys. Terminating.")
         return
+        
+    if not openai_api_key:
+        logging.warning("OpenAI API key not found. Will use template tweets as fallback.")
 
     try:
         # Twitter API clients
@@ -209,9 +290,14 @@ def main():
         logging.warning("No token data available. Skipping tweet.")
         return
 
-    # Prepare tweet texts
-    tweet_text = format_tweet(top_3)
-    link_tweet_text = format_link_tweet()  # No arguments needed
+    # Generate AI tweets or use fallback
+    if openai_api_key:
+        logging.info("=== GENERATING AI TWEETS ===")
+        tweet_text, link_tweet_text = generate_ai_tweet(top_3)
+    else:
+        logging.info("=== USING TEMPLATE TWEETS ===")
+        tweet_text = format_tweet(top_3)
+        link_tweet_text = format_link_tweet()
     
     # Validate length BEFORE any uploads
     if len(tweet_text) > 280:
@@ -221,6 +307,10 @@ def main():
     if len(link_tweet_text) > 280:
         logging.error(f"Reply tweet too long ({len(link_tweet_text)} characters). CANCELING.")
         return
+
+    logging.info(f"📝 Final tweets prepared:")
+    logging.info(f"   Main: {len(tweet_text)} chars")
+    logging.info(f"   Reply: {len(link_tweet_text)} chars")
 
     try:
         # STEP 1: Upload ALL images at the beginning
