@@ -211,7 +211,7 @@ def main():
 
     # Prepare tweet texts
     tweet_text = format_tweet(top_3)
-    link_tweet_text = format_link_tweet(top_3)  # Pass data for variability
+    link_tweet_text = format_link_tweet()  # No arguments needed
     
     # Validate length BEFORE any uploads
     if len(tweet_text) > 280:
