@@ -1,365 +1,434 @@
 import tweepy
 import time
+
 import requests
+
 import json
-from datetime import datetime, timezone
+
+from datetime import datetime, timezone # Dodano timezone dla UTC
+
 import logging
+
 import os
+
+
+
+# Dodane do obsługi uploadu grafiki
+
 from tweepy import OAuth1UserHandler, API
 
-# Try to import OpenAI - handle different versions
-openai_client = None
-try:
-    # Try new OpenAI v1.x
-    from openai import OpenAI
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if openai_api_key:
-        openai_client = OpenAI(api_key=openai_api_key)
-        logging.info("OpenAI v1.x client initialized")
-except ImportError:
-    try:
-        # Try old OpenAI v0.x
-        import openai
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if openai_api_key:
-            openai.api_key = openai_api_key
-            openai_client = "legacy"  # Flag for legacy usage
-            logging.info("OpenAI v0.x client initialized")
-    except ImportError:
-        logging.warning("OpenAI library not available")
-        openai_client = None
 
-# Logging configuration
+
+# Konfiguracja logowania
+
 logging.basicConfig(
+
     level=logging.INFO,
+
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
+
+    handlers=[logging.StreamHandler()] # Logowanie do konsoli/outputu Akcji
+
 )
 
-# API keys
+# Klucze API odczytywane ze zmiennych środowiskowych
+
 api_key = os.getenv("TWITTER_API_KEY")
+
 api_secret = os.getenv("TWITTER_API_SECRET")
+
 access_token = os.getenv("TWITTER_ACCESS_TOKEN")
+
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+
+
+
+# URL API outlight.fun - z pierwszego kodu (1h timeframe)
 
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
-def safe_tweet_with_retry(client, text, media_ids=None, in_reply_to_tweet_id=None, max_retries=3):
-    """
-    Safely send tweet with rate limit handling and retry logic
-    """
-    for attempt in range(max_retries):
-        try:
-            response = client.create_tweet(
-                text=text,
-                media_ids=media_ids,
-                in_reply_to_tweet_id=in_reply_to_tweet_id
-            )
-            logging.info(f"Tweet sent successfully! ID: {response.data['id']}")
-            return response
-            
-        except tweepy.TooManyRequests as e:
-            reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
-            current_time = int(time.time())
-            wait_time = max(reset_time - current_time + 60, 300)  # Min 5 min buffer
-            
-            logging.warning(f"Rate limit exceeded. Attempt {attempt + 1}/{max_retries}")
-            logging.warning(f"Waiting {wait_time} seconds before retry")
-            
-            if attempt < max_retries - 1:  # Don't wait on last attempt
-                time.sleep(wait_time)
-            else:
-                logging.error("Maximum retry attempts exceeded. Tweet not sent.")
-                raise e
-                
-        except tweepy.Forbidden as e:
-            logging.error(f"Authorization error: {e}")
-            raise e
-            
-        except tweepy.BadRequest as e:
-            logging.error(f"Bad request (possibly tweet too long?): {e}")
-            raise e
-            
-        except Exception as e:
-            logging.error(f"Unexpected error on attempt {attempt + 1}: {e}")
-            if attempt == max_retries - 1:
-                raise e
-            time.sleep(30)  # Short pause before retry
-    
-    return None
 
-def safe_media_upload(api_v1, image_path, max_retries=3):
-    """
-    Safely upload media with rate limit handling
-    """
-    if not os.path.isfile(image_path):
-        logging.error(f"Image file not found: {image_path}")
-        return None
-    
-    for attempt in range(max_retries):
-        try:
-            media = api_v1.media_upload(image_path)
-            logging.info(f"Image uploaded successfully. Media ID: {media.media_id}")
-            return media.media_id
-            
-        except tweepy.TooManyRequests as e:
-            reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
-            current_time = int(time.time())
-            wait_time = max(reset_time - current_time + 60, 180)
-            
-            logging.warning(f"Rate limit for media upload. Attempt {attempt + 1}/{max_retries}")
-            logging.warning(f"Waiting {wait_time} seconds")
-            
-            if attempt < max_retries - 1:
-                time.sleep(wait_time)
-            else:
-                logging.error("Failed to upload image after all attempts")
-                return None
-                
-        except Exception as e:
-            logging.error(f"Image upload error on attempt {attempt + 1}: {e}")
-            if attempt == max_retries - 1:
-                return None
-            time.sleep(30)
-    
-    return None
 
 def get_top_tokens():
-    """Fetch data from outlight.fun API"""
+
+    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny, licząc tylko kanały z win_rate > 30%"""
+
     try:
+
         response = requests.get(OUTLIGHT_API_URL, verify=False)
+
         response.raise_for_status()
+
         data = response.json()
 
+
+
         tokens_with_filtered_calls = []
+
         for token in data:
+
             channel_calls = token.get('channel_calls', [])
+
+            # Licz tylko kanały z win_rate > 30%
+
             calls_above_30 = [call for call in channel_calls if call.get('win_rate', 0) > 30]
+
             count_calls = len(calls_above_30)
+
             if count_calls > 0:
+
                 token_copy = token.copy()
+
                 token_copy['filtered_calls'] = count_calls
+
                 tokens_with_filtered_calls.append(token_copy)
 
+
+
+        # Sortuj po liczbie filtered_calls malejąco
+
         sorted_tokens = sorted(tokens_with_filtered_calls, key=lambda x: x.get('filtered_calls', 0), reverse=True)
+
         top_3 = sorted_tokens[:3]
+
         return top_3
+
     except Exception as e:
-        logging.error(f"Error fetching data from API: {e}")
+
+        logging.error(f"Unexpected error in get_top_tokens: {e}")
+
         return None
 
+
+
 def format_tweet(top_3_tokens):
-    """Format main tweet - FALLBACK if AI fails"""
+
+    """Format tweet with top 3 tokens (tylko calls z win_rate > 30%)"""
+
     tweet = f"🚀Top 3 Most 📞 1h\n\n"
+
     medals = ['🥇', '🥈', '🥉']
+
     for i, token in enumerate(top_3_tokens, 0):
+
         calls = token.get('filtered_calls', 0)
+
         symbol = token.get('symbol', 'Unknown')
+
         address = token.get('address', 'No Address Provided')
+
         medal = medals[i] if i < len(medals) else f"{i+1}."
+
         tweet += f"{medal} ${symbol}\n"
+
         tweet += f"{address}\n"
+
         tweet += f"📞 {calls}\n\n"
+
     tweet = tweet.rstrip('\n') + '\n\n'
+
     return tweet
 
-def generate_ai_tweet(top_3_tokens):
-    """Generate intelligent tweet using OpenAI based on token data"""
-    if not openai_client:
-        logging.warning("OpenAI client not initialized. Using fallback.")
-        return format_tweet(top_3_tokens)
-        
-    try:
-        # Prepare data for AI
-        token_data = []
-        for i, token in enumerate(top_3_tokens, 1):
-            calls = token.get('filtered_calls', 0)
-            symbol = token.get('symbol', 'Unknown')
-            address = token.get('address', 'No Address')[:8] + "..."  # Shorten address
-            token_data.append(f"{i}. ${symbol} - {calls} calls - {address}")
-        
-        data_summary = "\n".join(token_data)
-        total_calls = sum(token.get('filtered_calls', 0) for token in top_3_tokens)
-        
-        # Create prompt for OpenAI
-        system_prompt = """You are a crypto analyst responding in crypto style, in English. Use crypto slang, emojis, and engaging language that resonates with the crypto community. Be professional but use terms like 'pumping', 'calls', 'gems', 'alpha', etc. Keep it authentic to crypto Twitter culture."""
-        
-        prompt = f"""Create an engaging crypto Twitter post about the most called tokens in the last hour.
 
-DATA FROM OUTLIGHT.FUN:
-{data_summary}
 
-Total calls tracked: {total_calls}
+def format_link_tweet():
 
-Create 1 tweet only:
-- Engaging announcement about top 3 most called tokens (max 270 chars)
-- Use crypto slang and style
-- Include relevant emojis
-- Focus on the data insights  
-- Include token symbols with $ prefix
-- Make it sound natural and engaging for crypto Twitter
+    """Format the link tweet (reply)"""
 
-Format your response as just the tweet text, no labels needed."""
+    return "\ud83e\uddea Data from: \ud83d\udd17 https://outlight.fun/\n#SOL #Outlight #TokenCalls "
 
-        logging.info("Generating AI tweets...")
-        
-        # Handle different OpenAI versions
-        if openai_client == "legacy":
-            # Old OpenAI v0.x
-            import openai
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=300,
-                temperature=0.8
-            )
-            ai_response = response.choices[0].message.content.strip()
-        else:
-            # New OpenAI v1.x
-            response = openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=300,
-                temperature=0.8
-            )
-            ai_response = response.choices[0].message.content.strip()
-        
-        logging.info(f"AI Response received: {len(ai_response)} characters")
-        
-        # Clean up the response (remove any formatting artifacts)
-        main_tweet = ai_response.strip()
-        
-        # Remove any potential labels that might slip through
-        if main_tweet.startswith("MAIN_TWEET:"):
-            main_tweet = main_tweet.replace("MAIN_TWEET:", "").strip()
-        if main_tweet.startswith("Tweet:"):
-            main_tweet = main_tweet.replace("Tweet:", "").strip()
-        
-        # Validate length
-        if len(main_tweet) > 280:
-            main_tweet = main_tweet[:277] + "..."
-            logging.warning(f"Main tweet truncated to {len(main_tweet)} characters")
-        
-        if not main_tweet:
-            logging.warning("Empty AI response, using fallback")
-            return format_tweet(top_3_tokens)
-        
-        logging.info(f"✅ AI tweet generated successfully!")
-        logging.info(f"   - Tweet: {len(main_tweet)} chars")
-        
-        return main_tweet
-        
-    except Exception as e:
-        logging.error(f"Error generating AI tweets: {e}")
-        logging.warning("Falling back to template tweets...")
-        
-        # Fallback to original format if AI fails
-        return format_tweet(top_3_tokens)
+
 
 def main():
+
     logging.info("GitHub Action: Bot execution started.")
 
+
+
     if not all([api_key, api_secret, access_token, access_token_secret]):
-        logging.error("Missing required Twitter API keys. Terminating.")
+
+        logging.error("CRITICAL: One or more Twitter API keys are missing from environment variables. Exiting.")
+
         return
-        
-    if not openai_client:
-        logging.warning("OpenAI API key not found. Will use template tweets as fallback.")
+
+
 
     try:
-        # Twitter API clients
+
+        # Klient v2 do tweetów tekstowych i odpowiedzi
+
         client = tweepy.Client(
+
             consumer_key=api_key,
+
             consumer_secret=api_secret,
+
             access_token=access_token,
+
             access_token_secret=access_token_secret
+
         )
+
         me = client.get_me()
-        logging.info(f"Successfully authenticated: @{me.data.username}")
+
+        logging.info(f"Successfully authenticated on Twitter as @{me.data.username}")
+
+
+
+        # Klient v1.1 do uploadu grafiki
 
         auth_v1 = OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
+
         api_v1 = API(auth_v1)
-        
+
+    except tweepy.TweepyException as e:
+
+        logging.error(f"Tweepy Error creating Twitter client or authenticating: {e}")
+
+        return
+
     except Exception as e:
-        logging.error(f"Error setting up Twitter clients: {e}")
+
+        logging.error(f"Unexpected error during Twitter client setup: {e}")
+
         return
 
-    # Fetch data
+
+
     top_3 = get_top_tokens()
-    if not top_3:
-        logging.warning("No token data available. Skipping tweet.")
+
+    if not top_3: # Obsługuje zarówno None (błąd API) jak i pustą listę (brak tokenów)
+
+        logging.warning("Failed to fetch top tokens or no tokens returned. Skipping tweet.")
+
         return
 
-    # Generate AI tweets or use fallback
-    if openai_client:
-        logging.info("=== GENERATING AI TWEET ===")
-        tweet_text = generate_ai_tweet(top_3)
-    else:
-        logging.info("=== USING TEMPLATE TWEET ===")
-        tweet_text = format_tweet(top_3)
-    
-    # Validate length BEFORE any uploads
+
+
+    tweet_text = format_tweet(top_3)
+
+    logging.info(f"Prepared main tweet ({len(tweet_text)} chars):")
+
+    logging.info(tweet_text)
+
+
+
     if len(tweet_text) > 280:
-        logging.error(f"Main tweet too long ({len(tweet_text)} characters). CANCELING.")
-        return
 
-    logging.info(f"📝 Final tweet prepared:")
-    logging.info(f"   Tweet: {len(tweet_text)} chars")
+        logging.warning(f"Generated main tweet is too long ({len(tweet_text)} chars). Twitter will likely reject it.")
+
+        # Można dodać return, jeśli nie chcemy próbować wysyłać za długiego tweeta
+
+        # return
+
+
 
     try:
-        # STEP 1: Upload single image
-        logging.info("=== STEP 1: Uploading single image ===")
-        
-        main_image_path = os.path.join("images", "msgtwt.png")
-        
-        # Upload image
-        logging.info("Uploading main tweet image...")
-        main_media_id = safe_media_upload(api_v1, main_image_path)
-        
-        if not main_media_id:
-            logging.error("❌ CRITICAL ERROR: Failed to upload main image.")
-            logging.error("CANCELING entire process - no tweets will be sent without images.")
-            return
-            
-        logging.info("✅ SUCCESS: Image uploaded successfully!")
-        logging.info(f"   - Main image: Media ID {main_media_id}")
-        
-        # STEP 2: Send main tweet with image
-        logging.info("=== STEP 2: Sending main tweet with image ===")
-        main_tweet_response = safe_tweet_with_retry(
-            client, 
-            tweet_text, 
-            media_ids=[main_media_id]
-        )
-        
-        if not main_tweet_response:
-            logging.error("❌ CRITICAL ERROR: Failed to send main tweet!")
-            return
-            
-        main_tweet_id = main_tweet_response.data['id']
-        logging.info(f"✅ Main tweet sent with image! ID: {main_tweet_id}")
-        logging.info("🎉 SUCCESS: Tweet sent successfully!")
-        logging.info(f"   🔗 Tweet: https://x.com/user/status/{main_tweet_id}")
+
+        # --- Dodanie grafiki do głównego tweeta ---
+
+        image_path = os.path.join("images", "msgtwt.png")
+
+        if not os.path.isfile(image_path):
+
+            logging.error(f"Image file not found: {image_path}. Sending tweet without image.")
+
+            media_id = None
+
+        else:
+
+            try:
+
+                media = api_v1.media_upload(image_path)
+
+                media_id = media.media_id
+
+                logging.info(f"Image uploaded successfully. Media ID: {media_id}")
+
+            except Exception as e:
+
+                logging.error(f"Error uploading image: {e}. Sending tweet without image.")
+
+                media_id = None
+
+
+
+        # Wysyłanie głównego tweeta z grafiką (jeśli się udało)
+
+        if media_id:
+
+            response_main_tweet = client.create_tweet(text=tweet_text, media_ids=[media_id] if media_id else None)
+
+        else:
+
+            response_main_tweet = client.create_tweet(text=tweet_text)
+
+        main_tweet_id = response_main_tweet.data['id']
+
+        logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}")
+
+
+
+        # Wait at least 60 seconds before sending reply
+
+        time.sleep(120)
+
+
+
+        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi (z grafiką)
+
+        link_tweet_text = format_link_tweet()
+
+        logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
+
+        logging.info(link_tweet_text)
+
+
+
+        if len(link_tweet_text) > 280:
+
+            logging.warning(f"Generated reply tweet is too long ({len(link_tweet_text)} chars). Twitter will likely reject it.")
+
+            # Można zdecydować, czy mimo to próbować wysłać, czy pominąć odpowiedź
+
+            # return lub continue w pętli (ale tu nie ma pętli)
+
+
+
+        # --- Dodanie grafiki do odpowiedzi ---
+
+        reply_image_path = os.path.join("images", "msgtwtft.png")
+
+        if not os.path.isfile(reply_image_path):
+
+            logging.error(f"Reply image file not found: {reply_image_path}. Sending reply without image.")
+
+            reply_media_id = None
+
+        else:
+
+            try:
+
+                reply_media = api_v1.media_upload(reply_image_path)
+
+                reply_media_id = reply_media.media_id
+
+                logging.info(f"Reply image uploaded successfully. Media ID: {reply_media_id}")
+
+            except Exception as e:
+
+                logging.error(f"Error uploading reply image: {e}. Sending reply without image.")
+
+                reply_media_id = None
+
+
+
+        # Send reply tweet
+
+        if reply_media_id:
+
+            response_reply_tweet = client.create_tweet(
+
+                text=link_tweet_text,
+
+                in_reply_to_tweet_id=main_tweet_id,
+
+                media_ids=[reply_media_id]
+
+            )
+
+        else:
+
+            response_reply_tweet = client.create_tweet(
+
+                text=link_tweet_text,
+
+                in_reply_to_tweet_id=main_tweet_id
+
+            )
+
+        reply_tweet_id = response_reply_tweet.data['id']
+
+        logging.info(f"Reply tweet sent successfully! Tweet ID: {reply_tweet_id}")
+
+
+
+    except tweepy.TooManyRequests as e:
+
+        reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
+
+        current_time = int(time.time())
+
+        wait_time = max(reset_time - current_time + 10, 60)
+
+        logging.error(f"Rate limit exceeded. Need to wait {wait_time} seconds before retrying")
+
+    except tweepy.TweepyException as e:
+
+        logging.error(f"Twitter API error sending tweet: {e}")
 
     except Exception as e:
-        logging.error(f"Unexpected error during process: {e}")
-        import traceback
-        logging.error(f"Full traceback: {traceback.format_exc()}")
+
+        logging.error(f"Unexpected error sending tweet: {e}")
+
+
 
     logging.info("GitHub Action: Bot execution finished.")
 
+
+
 if __name__ == "__main__":
-    # Disable SSL warnings if verify=False is used in requests
-    try:
-        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
-        logging.warning("SSL verification disabled for requests")
-    except AttributeError:
-        pass
-    
+
+    # Ostrzeżenie o wyłączeniu weryfikacji SSL, jeśli używane jest `verify=False` w `requests.get`
+
+    if 'requests' in globals() and hasattr(requests, 'packages') and hasattr(requests.packages, 'urllib3'):
+
+        try:
+
+            # Wyłączenie ostrzeżeń InsecureRequestWarning, ponieważ verify=False jest używane celowo (choć niezalecane)
+
+            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
+            logging.warning("SSL verification is disabled for requests (verify=False). "
+
+                            "This is not recommended for production environments but used here as in the original script.")
+
+        except AttributeError:
+
+            # Na wypadek gdyby struktura requests.packages.urllib3 się zmieniła
+
+            logging.warning("Could not disable InsecureRequestWarning for requests.")
+
+            pass
+
     main()
+
+def create_tweets_with_rate_limit(client, tweets_to_send):
+    """
+    Send tweets with proper rate limiting
+    """
+    for tweet in tweets_to_send:
+        try:
+            response = client.create_tweet(text=tweet)
+            print(f"Tweet sent successfully: {response.data['id']}")
+            # Wait at least 60 seconds between tweets to avoid rate limits
+            time.sleep(60)  # 60 seconds = 1 minute
+        except tweepy.TooManyRequests as e:
+            # Get the reset time from the error response
+            reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
+            current_time = int(time.time())
+            # Calculate wait time (add 10 seconds buffer)
+            wait_time = max(reset_time - current_time + 10, 60)
+            
+            print(f"Rate limit exceeded. Waiting {wait_time} seconds")
+            time.sleep(wait_time)
+            # Retry the tweet after waiting
+            try:
+                response = client.create_tweet(text=tweet)
+                print(f"Tweet sent successfully after waiting: {response.data['id']}")
+            except Exception as retry_e:
+                print(f"Failed to send tweet even after waiting: {retry_e}")
+        except Exception as e:
+            print(f"Error sending tweet: {e}")
+            # Wait before trying the next tweet anyway
+            time.sleep(60)
