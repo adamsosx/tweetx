@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import logging
 import os
 from tweepy import OAuth1UserHandler, API
-import openai
+from openai import OpenAI
 
 # Logging configuration
 logging.basicConfig(
@@ -22,8 +22,10 @@ access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
-# Initialize OpenAI
-openai.api_key = openai_api_key
+# Initialize OpenAI (for v1.x)
+openai_client = None
+if openai_api_key:
+    openai_client = OpenAI(api_key=openai_api_key)
 
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
@@ -133,6 +135,10 @@ def get_top_tokens():
 
 def generate_ai_tweet(top_3_tokens):
     """Generate intelligent tweet using OpenAI based on token data"""
+    if not openai_client:
+        logging.warning("OpenAI client not initialized. Using fallback.")
+        return format_tweet(top_3_tokens), format_link_tweet()
+        
     try:
         # Prepare data for AI
         token_data = []
@@ -171,7 +177,7 @@ REPLY_TWEET: [your reply tweet here]"""
 
         logging.info("Generating AI tweets...")
         
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a professional crypto analyst who creates engaging Twitter content about token data."},
@@ -291,7 +297,7 @@ def main():
         return
 
     # Generate AI tweets or use fallback
-    if openai_api_key:
+    if openai_client:
         logging.info("=== GENERATING AI TWEETS ===")
         tweet_text, link_tweet_text = generate_ai_tweet(top_3)
     else:
