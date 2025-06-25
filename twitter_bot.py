@@ -148,6 +148,76 @@ def get_top_tokens():
         logging.error(f"Error fetching data from API: {e}")
         return None
 
+def format_tweet(top_3_tokens):
+    """Format main tweet - FALLBACK if AI fails"""
+    tweet = f"🚀Top 3 Most 📞 1h\n\n"
+    medals = ['🥇', '🥈', '🥉']
+    for i, token in enumerate(top_3_tokens, 0):
+        calls = token.get('filtered_calls', 0)
+        symbol = token.get('symbol', 'Unknown')
+        address = token.get('address', 'No Address Provided')
+        medal = medals[i] if i < len(medals) else f"{i+1}."
+        tweet += f"{medal} ${symbol}\n"
+        tweet += f"{address}\n"
+        tweet += f"📞 {calls}\n\n"
+    tweet = tweet.rstrip('\n') + '\n\n'
+    return tweet
+
+def format_link_tweet():
+    """Format link tweet with complete rotation of all prefix+hashtag combinations - 24 total"""
+    import os
+    
+    # 3 prefixes
+    prefixes = [
+        "🧮 Data powered by:",
+        "📈 Insights from:",
+        "🔍 Research via:"
+    ]
+    
+    # 8 hashtag sets to create 3x8=24 combinations
+    hashtag_sets = [
+        "#TokenAnalysis #SOL #Data",
+        "#Solana #DeFi #TokenData", 
+        "#SOL #Outlight #TokenCalls",
+        "#DeFi #Solana #TokenTracker",
+        "#SOL #Analytics #Crypto",
+        "#TokenStats #SOL #Research",
+        "#Solana #CallData #Analytics",
+        "#DeFi #TokenInsights #SOL"
+    ]
+    
+    # Simple counter-based alternation
+    counter_file = "combo_counter.txt"
+    
+    try:
+        if os.path.exists(counter_file):
+            with open(counter_file, 'r') as f:
+                counter = int(f.read().strip())
+        else:
+            counter = 0
+    except:
+        counter = 0
+    
+    # Calculate which prefix and hashtag combination to use
+    # This creates a complete rotation: 3 prefixes x 8 hashtags = 24 total combinations
+    total_combinations = len(prefixes) * len(hashtag_sets)
+    
+    # Get current combination
+    prefix_index = counter // len(hashtag_sets)  # Which prefix group we're in
+    hashtag_index = counter % len(hashtag_sets)  # Which hashtag within that group
+    
+    prefix = prefixes[prefix_index % len(prefixes)]
+    hashtags = hashtag_sets[hashtag_index]
+    
+    # Save next counter value
+    try:
+        with open(counter_file, 'w') as f:
+            f.write(str((counter + 1) % total_combinations))
+    except:
+        pass  # If file write fails, just continue
+    
+    return f"{prefix} 🔗 https://outlight.fun/\n{hashtags}"
+
 def generate_ai_tweet(top_3_tokens):
     """Generate intelligent tweet using OpenAI based on token data"""
     if not openai_client:
@@ -192,17 +262,33 @@ REPLY_TWEET: [your reply tweet here]"""
 
         logging.info("Generating AI tweets...")
         
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a professional crypto analyst who creates engaging Twitter content about token data."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=400,
-            temperature=0.7
-        )
+        # Handle different OpenAI versions
+        if openai_client == "legacy":
+            # Old OpenAI v0.x
+            import openai
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a professional crypto analyst who creates engaging Twitter content about token data."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=400,
+                temperature=0.7
+            )
+            ai_response = response.choices[0].message.content.strip()
+        else:
+            # New OpenAI v1.x
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a professional crypto analyst who creates engaging Twitter content about token data."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=400,
+                temperature=0.7
+            )
+            ai_response = response.choices[0].message.content.strip()
         
-        ai_response = response.choices[0].message.content.strip()
         logging.info(f"AI Response received: {len(ai_response)} characters")
         
         # Parse the response
@@ -215,6 +301,11 @@ REPLY_TWEET: [your reply tweet here]"""
                 main_tweet = line.replace("MAIN_TWEET:", "").strip()
             elif line.startswith("REPLY_TWEET:"):
                 reply_tweet = line.replace("REPLY_TWEET:", "").strip()
+        
+        # Fallback if parsing failed
+        if not main_tweet or not reply_tweet:
+            logging.warning("Failed to parse AI response, using fallback")
+            return format_tweet(top_3_tokens), format_link_tweet()
         
         # Validate length
         if len(main_tweet) > 280:
