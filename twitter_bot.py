@@ -163,66 +163,11 @@ def format_tweet(top_3_tokens):
     tweet = tweet.rstrip('\n') + '\n\n'
     return tweet
 
-def format_link_tweet():
-    """Format link tweet with complete rotation of all prefix+hashtag combinations - 24 total"""
-    import os
-    
-    # 3 prefixes
-    prefixes = [
-        "🧮 Data powered by:",
-        "📈 Insights from:",
-        "🔍 Research via:"
-    ]
-    
-    # 8 hashtag sets to create 3x8=24 combinations
-    hashtag_sets = [
-        "#TokenAnalysis #SOL #Data",
-        "#Solana #DeFi #TokenData", 
-        "#SOL #Outlight #TokenCalls",
-        "#DeFi #Solana #TokenTracker",
-        "#SOL #Analytics #Crypto",
-        "#TokenStats #SOL #Research",
-        "#Solana #CallData #Analytics",
-        "#DeFi #TokenInsights #SOL"
-    ]
-    
-    # Simple counter-based alternation
-    counter_file = "combo_counter.txt"
-    
-    try:
-        if os.path.exists(counter_file):
-            with open(counter_file, 'r') as f:
-                counter = int(f.read().strip())
-        else:
-            counter = 0
-    except:
-        counter = 0
-    
-    # Calculate which prefix and hashtag combination to use
-    # This creates a complete rotation: 3 prefixes x 8 hashtags = 24 total combinations
-    total_combinations = len(prefixes) * len(hashtag_sets)
-    
-    # Get current combination
-    prefix_index = counter // len(hashtag_sets)  # Which prefix group we're in
-    hashtag_index = counter % len(hashtag_sets)  # Which hashtag within that group
-    
-    prefix = prefixes[prefix_index % len(prefixes)]
-    hashtags = hashtag_sets[hashtag_index]
-    
-    # Save next counter value
-    try:
-        with open(counter_file, 'w') as f:
-            f.write(str((counter + 1) % total_combinations))
-    except:
-        pass  # If file write fails, just continue
-    
-    return f"{prefix} 🔗 https://outlight.fun/\n{hashtags}"
-
 def generate_ai_tweet(top_3_tokens):
     """Generate intelligent tweet using OpenAI based on token data"""
     if not openai_client:
         logging.warning("OpenAI client not initialized. Using fallback.")
-        return format_tweet(top_3_tokens), format_link_tweet()
+        return format_tweet(top_3_tokens)
         
     try:
         # Prepare data for AI
@@ -317,43 +262,6 @@ Format your response as just the tweet text, no labels needed."""
         # Fallback to original format if AI fails
         return format_tweet(top_3_tokens)
 
-def format_link_tweet():
-    """Format link tweet with variability to avoid spam detection"""
-    import random
-    
-    # Variable prefixes
-    prefixes = [
-        "🧪 Data source:",
-        "📊 Analytics from:",
-        "🔍 Research via:",
-        "📈 Insights from:",
-        "🧮 Data powered by:"
-    ]
-    
-    # Variable suffixes
-    suffixes = [
-        "#SOL #Outlight #TokenCalls",
-        "#Solana #DeFi #TokenData",
-        "#SOL #Analytics #Crypto",
-        "#TokenAnalysis #SOL #Data",
-        "#DeFi #Solana #TokenTracker"
-    ]
-    
-    # Random timestamp or token count reference
-    extras = [
-        f"⏰ Updated hourly",
-        f"📞 Live call tracking",
-        f"🎯 Real-time data",
-        f"⚡ Fresh insights",
-        f"🔄 Auto-updated"
-    ]
-    
-    prefix = random.choice(prefixes)
-    suffix = random.choice(suffixes)
-    extra = random.choice(extras)
-    
-    return f"{prefix} 🔗 https://outlight.fun/\n{extra}\n{suffix}"
-
 def main():
     logging.info("GitHub Action: Bot execution started.")
 
@@ -361,7 +269,7 @@ def main():
         logging.error("Missing required Twitter API keys. Terminating.")
         return
         
-    if not openai_api_key:
+    if not openai_client:
         logging.warning("OpenAI API key not found. Will use template tweets as fallback.")
 
     try:
@@ -405,10 +313,12 @@ def main():
     logging.info(f"   Tweet: {len(tweet_text)} chars")
 
     try:
-        # STEP 1: Upload ALL images at the beginning
-        logging.info("=== STEP 1: Uploading all images ===")
+        # STEP 1: Upload single image
+        logging.info("=== STEP 1: Uploading single image ===")
         
-        # Upload first image
+        main_image_path = os.path.join("images", "msgtwt.png")
+        
+        # Upload image
         logging.info("Uploading main tweet image...")
         main_media_id = safe_media_upload(api_v1, main_image_path)
         
@@ -420,7 +330,7 @@ def main():
         logging.info("✅ SUCCESS: Image uploaded successfully!")
         logging.info(f"   - Main image: Media ID {main_media_id}")
         
-        # STEP 2: Send main tweet (with image guarantee)
+        # STEP 2: Send main tweet with image
         logging.info("=== STEP 2: Sending main tweet with image ===")
         main_tweet_response = safe_tweet_with_retry(
             client, 
@@ -439,16 +349,17 @@ def main():
 
     except Exception as e:
         logging.error(f"Unexpected error during process: {e}")
+        import traceback
+        logging.error(f"Full traceback: {traceback.format_exc()}")
 
     logging.info("GitHub Action: Bot execution finished.")
 
 if __name__ == "__main__":
     # Disable SSL warnings if verify=False is used in requests
-    if 'requests' in globals():
-        try:
-            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
-            logging.warning("SSL verification disabled for requests")
-        except AttributeError:
-            pass
+    try:
+        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+        logging.warning("SSL verification disabled for requests")
+    except AttributeError:
+        pass
     
     main()
