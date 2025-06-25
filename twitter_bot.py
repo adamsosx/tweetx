@@ -6,7 +6,28 @@ from datetime import datetime, timezone
 import logging
 import os
 from tweepy import OAuth1UserHandler, API
-from openai import OpenAI
+
+# Try to import OpenAI - handle different versions
+openai_client = None
+try:
+    # Try new OpenAI v1.x
+    from openai import OpenAI
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if openai_api_key:
+        openai_client = OpenAI(api_key=openai_api_key)
+        logging.info("OpenAI v1.x client initialized")
+except ImportError:
+    try:
+        # Try old OpenAI v0.x
+        import openai
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if openai_api_key:
+            openai.api_key = openai_api_key
+            openai_client = "legacy"  # Flag for legacy usage
+            logging.info("OpenAI v0.x client initialized")
+    except ImportError:
+        logging.warning("OpenAI library not available")
+        openai_client = None
 
 # Logging configuration
 logging.basicConfig(
@@ -20,12 +41,6 @@ api_key = os.getenv("TWITTER_API_KEY")
 api_secret = os.getenv("TWITTER_API_SECRET")
 access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
-# Initialize OpenAI (for v1.x)
-openai_client = None
-if openai_api_key:
-    openai_client = OpenAI(api_key=openai_api_key)
 
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
