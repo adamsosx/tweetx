@@ -19,201 +19,13 @@ from tweepy import OAuth1UserHandler, API
 
 
 
-# Ładowanie konfiguracji
-
-def load_config(config_path="config.json"):
-
-    """Ładuje konfigurację z pliku JSON"""
-
-    try:
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-
-            return json.load(f)
-
-    except FileNotFoundError:
-
-        logging.error(f"Plik konfiguracyjny {config_path} nie został znaleziony. Używam wartości domyślnych.")
-
-        # Konfiguracja domyślna jako fallback
-
-        return {
-
-            "api": {"outlight_base_url": "https://outlight.fun/api/tokens/most-called", "timeframe": "1h", "verify_ssl": False},
-
-            "token_filtering": {"min_win_rate": 30, "top_tokens_count": 3},
-
-            "timing": {"reply_delay_seconds": 120},
-
-            "images": {"main_tweet_image": "images/msgtwt.png", "reply_tweet_image": "images/msgtwtft.png"},
-
-            "logging": {"level": "INFO", "format": "%(asctime)s - %(levelname)s - %(message)s"}
-
-        }
-
-    except json.JSONDecodeError as e:
-
-        logging.error(f"Błąd parsowania konfiguracji: {e}. Używam wartości domyślnych.")
-
-        return load_config.__defaults__[0] if hasattr(load_config, '__defaults__') else {}
-
-
-
-# Ładowanie konfiguracji globalnej
-
-config = load_config()
-
-
-
-def retry_api_call(func, *args, **kwargs):
-
-    """
-
-    Wrapper do retry wywołań API Twitter z konfigurowalną logiką ponownych prób
-
-    """
-
-    retry_config = config.get('twitter', {}).get('retry', {})
-
-    max_attempts = retry_config.get('max_attempts', 3)
-
-    base_delay = retry_config.get('base_delay', 5)
-
-    max_delay = retry_config.get('max_delay', 300)
-
-    backoff_multiplier = retry_config.get('backoff_multiplier', 2)
-
-    retryable_status_codes = retry_config.get('retryable_status_codes', [429, 500, 502, 503, 504])
-
-    retryable_exceptions = retry_config.get('retryable_exceptions', ['ConnectionError', 'Timeout', 'TooManyRequests'])
-
-    
-
-    for attempt in range(max_attempts):
-
-        try:
-
-            return func(*args, **kwargs)
-
-            
-
-        except tweepy.TooManyRequests as e:
-
-            if 'TooManyRequests' not in retryable_exceptions:
-
-                raise
-
-            
-
-            # Specjalna obsługa rate limiting - używamy Twitter rate limit headers
-
-            reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
-
-            current_time = int(time.time())
-
-            wait_time = max(reset_time - current_time + 10, base_delay)
-
-            wait_time = min(wait_time, max_delay)
-
-            
-
-            if attempt < max_attempts - 1:
-
-                logging.warning(f"Rate limit exceeded (attempt {attempt + 1}/{max_attempts}). "
-
-                              f"Waiting {wait_time} seconds before retry...")
-
-                time.sleep(wait_time)
-
-            else:
-
-                logging.error(f"Rate limit exceeded after {max_attempts} attempts. Giving up.")
-
-                raise
-
-                
-
-        except tweepy.TweepyException as e:
-
-            # Sprawdź czy to błąd, który można ponowić
-
-            status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
-
-            exception_name = type(e).__name__
-
-            
-
-            is_retryable = (
-
-                status_code in retryable_status_codes or
-
-                exception_name in retryable_exceptions or
-
-                'ConnectionError' in retryable_exceptions and 'connection' in str(e).lower() or
-
-                'Timeout' in retryable_exceptions and 'timeout' in str(e).lower()
-
-            )
-
-            
-
-            if not is_retryable or attempt >= max_attempts - 1:
-
-                logging.error(f"Twitter API error (attempt {attempt + 1}/{max_attempts}): {e}")
-
-                raise
-
-            
-
-            # Oblicz czas oczekiwania z exponential backoff
-
-            delay = min(base_delay * (backoff_multiplier ** attempt), max_delay)
-
-            logging.warning(f"Twitter API error (attempt {attempt + 1}/{max_attempts}): {e}. "
-
-                          f"Retrying in {delay} seconds...")
-
-            time.sleep(delay)
-
-            
-
-        except Exception as e:
-
-            # Dla innych błędów sprawdź czy są w liście retryable
-
-            exception_name = type(e).__name__
-
-            
-
-            if exception_name not in retryable_exceptions or attempt >= max_attempts - 1:
-
-                logging.error(f"Unexpected error (attempt {attempt + 1}/{max_attempts}): {e}")
-
-                raise
-
-            
-
-            delay = min(base_delay * (backoff_multiplier ** attempt), max_delay)
-
-            logging.warning(f"Unexpected error (attempt {attempt + 1}/{max_attempts}): {e}. "
-
-                          f"Retrying in {delay} seconds...")
-
-            time.sleep(delay)
-
-
-
 # Konfiguracja logowania
-
-log_level = getattr(logging, config.get('logging', {}).get('level', 'INFO').upper())
-
-log_format = config.get('logging', {}).get('format', '%(asctime)s - %(levelname)s - %(message)s')
 
 logging.basicConfig(
 
-    level=log_level,
+    level=logging.INFO,
 
-    format=log_format,
+    format='%(asctime)s - %(levelname)s - %(message)s',
 
     handlers=[logging.StreamHandler()] # Logowanie do konsoli/outputu Akcji
 
@@ -231,79 +43,23 @@ access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 
 
-def retry_requests_call(func, *args, **kwargs):
+# URL API outlight.fun - z pierwszego kodu (1h timeframe)
 
-    """Wrapper do retry dla wywołań requests API"""
-
-    retry_attempts = config.get('api', {}).get('retry_attempts', 3)
-
-    base_delay = 2
-
-    
-
-    for attempt in range(retry_attempts):
-
-        try:
-
-            return func(*args, **kwargs)
-
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, 
-
-                requests.exceptions.HTTPError) as e:
-
-            if attempt >= retry_attempts - 1:
-
-                logging.error(f"API request failed after {retry_attempts} attempts: {e}")
-
-                raise
-
-            
-
-            delay = base_delay * (2 ** attempt)
-
-            logging.warning(f"API request failed (attempt {attempt + 1}/{retry_attempts}): {e}. "
-
-                          f"Retrying in {delay} seconds...")
-
-            time.sleep(delay)
+OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 
 
 def get_top_tokens():
 
-    """Pobiera dane z API outlight.fun i zwraca top tokeny, licząc tylko kanały z win_rate > min_win_rate"""
+    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny, licząc tylko kanały z win_rate > 30%"""
 
     try:
 
-        # Budowanie URL z parametrów konfiguracji
-
-        base_url = config.get('api', {}).get('outlight_base_url', 'https://outlight.fun/api/tokens/most-called')
-
-        timeframe = config.get('api', {}).get('timeframe', '1h')
-
-        url = f"{base_url}?timeframe={timeframe}"
-
-        
-
-        verify_ssl = config.get('api', {}).get('verify_ssl', False)
-
-        timeout = config.get('api', {}).get('request_timeout', 30)
-
-        
-
-        response = retry_requests_call(requests.get, url, verify=verify_ssl, timeout=timeout)
+        response = requests.get(OUTLIGHT_API_URL, verify=False)
 
         response.raise_for_status()
 
         data = response.json()
-
-
-
-        # Pobieranie parametrów filtrowania z konfiguracji
-
-        min_win_rate = config.get('token_filtering', {}).get('min_win_rate', 30)
-
-        top_count = config.get('token_filtering', {}).get('top_tokens_count', 3)
 
 
 
@@ -313,11 +69,11 @@ def get_top_tokens():
 
             channel_calls = token.get('channel_calls', [])
 
-            # Licz tylko kanały z win_rate > min_win_rate
+            # Licz tylko kanały z win_rate > 30%
 
-            calls_above_threshold = [call for call in channel_calls if call.get('win_rate', 0) > min_win_rate]
+            calls_above_30 = [call for call in channel_calls if call.get('win_rate', 0) > 30]
 
-            count_calls = len(calls_above_threshold)
+            count_calls = len(calls_above_30)
 
             if count_calls > 0:
 
@@ -333,9 +89,9 @@ def get_top_tokens():
 
         sorted_tokens = sorted(tokens_with_filtered_calls, key=lambda x: x.get('filtered_calls', 0), reverse=True)
 
-        top_tokens = sorted_tokens[:top_count]
+        top_3 = sorted_tokens[:3]
 
-        return top_tokens
+        return top_3
 
     except Exception as e:
 
@@ -345,45 +101,15 @@ def get_top_tokens():
 
 
 
-def format_main_tweet(top_tokens):
+def format_tweet(top_3_tokens):
 
-    """Format main tweet with first 3 tokens using configurable templates"""
+    """Format tweet with top 3 tokens (tylko calls z win_rate > 30%)"""
 
-    # Pobieranie konfiguracji
+    tweet = f"🚀Top 3 Most 📞 1h\n\n"
 
-    first_tweet_count = config.get('token_filtering', {}).get('first_tweet_count', 3)
+    medals = ['🥇', '🥈', '🥉']
 
-    main_template = config.get('tweet_templates', {}).get('main_tweet', {})
-
-    timeframe = config.get('api', {}).get('timeframe', '1h')
-
-    total_count = config.get('token_filtering', {}).get('top_tokens_count', 5)
-
-    
-
-    # Używamy tylko pierwszych tokenów
-
-    tokens_to_show = top_tokens[:first_tweet_count]
-
-    
-
-    header = main_template.get('header', '🚀Top {count} Most 📞 {timeframe}\n\n').format(
-
-        count=total_count, timeframe=timeframe
-
-    )
-
-    medals = main_template.get('medals', ['🥇', '🥈', '🥉'])
-
-    token_format = main_template.get('token_format', '{medal} ${symbol}\n{address}\n📞 {calls}\n\n')
-
-    footer = main_template.get('footer', '')
-
-    
-
-    tweet = header
-
-    for i, token in enumerate(tokens_to_show, 0):
+    for i, token in enumerate(top_3_tokens, 0):
 
         calls = token.get('filtered_calls', 0)
 
@@ -393,107 +119,23 @@ def format_main_tweet(top_tokens):
 
         medal = medals[i] if i < len(medals) else f"{i+1}."
 
-        
+        tweet += f"{medal} ${symbol}\n"
 
-        tweet += token_format.format(
+        tweet += f"{address}\n"
 
-            medal=medal,
+        tweet += f"📞 {calls}\n\n"
 
-            symbol=symbol,
-
-            address=address,
-
-            calls=calls
-
-        )
-
-    
-
-    tweet = tweet.rstrip('\n') + footer
+    tweet = tweet.rstrip('\n') + '\n\n'
 
     return tweet
 
 
 
-def format_tokens_reply_tweet(top_tokens):
+def format_link_tweet():
 
-    """Format reply tweet with remaining tokens (4-5) using configurable templates"""
+    """Format the link tweet (reply)"""
 
-    # Pobieranie konfiguracji
-
-    first_tweet_count = config.get('token_filtering', {}).get('first_tweet_count', 3)
-
-    total_count = config.get('token_filtering', {}).get('top_tokens_count', 5)
-
-    reply_template = config.get('tweet_templates', {}).get('tokens_reply_tweet', {})
-
-    
-
-    # Używamy tokenów od indeksu first_tweet_count
-
-    remaining_tokens = top_tokens[first_tweet_count:]
-
-    
-
-    if not remaining_tokens:
-
-        return None
-
-    
-
-    header_template = reply_template.get('header', '')
-
-    if header_template:
-
-        header = header_template.format(total_count=total_count)
-
-    else:
-
-        header = ""
-
-    medals = reply_template.get('medals', ['4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'])
-
-    token_format = reply_template.get('token_format', '{medal} ${symbol}\n{address}\n📞 {calls}\n\n')
-
-    footer = reply_template.get('footer', '')
-
-    
-
-    tweet = header
-
-    for i, token in enumerate(remaining_tokens, 0):
-
-        calls = token.get('filtered_calls', 0)
-
-        symbol = token.get('symbol', 'Unknown')
-
-        address = token.get('address', 'No Address Provided')
-
-        medal = medals[i] if i < len(medals) else f"{first_tweet_count + i + 1}."
-
-        
-
-        tweet += token_format.format(
-
-            medal=medal,
-
-            symbol=symbol,
-
-            address=address,
-
-            calls=calls
-
-        )
-
-    
-
-    tweet = tweet.rstrip('\n') + footer
-
-    return tweet
-
-
-
-
+    return "\ud83e\uddea Data from: \ud83d\udd17 https://outlight.fun/\n#SOL #Outlight #TokenCalls "
 
 
 
@@ -553,9 +195,9 @@ def main():
 
 
 
-    top_tokens = get_top_tokens()
+    top_3 = get_top_tokens()
 
-    if not top_tokens: # Obsługuje zarówno None (błąd API) jak i pustą listę (brak tokenów)
+    if not top_3: # Obsługuje zarówno None (błąd API) jak i pustą listę (brak tokenów)
 
         logging.warning("Failed to fetch top tokens or no tokens returned. Skipping tweet.")
 
@@ -563,45 +205,21 @@ def main():
 
 
 
-    # Formatowanie głównego tweeta (top 3)
+    tweet_text = format_tweet(top_3)
 
-    main_tweet_text = format_main_tweet(top_tokens)
+    logging.info(f"Prepared main tweet ({len(tweet_text)} chars):")
 
-    logging.info(f"Prepared main tweet ({len(main_tweet_text)} chars):")
-
-    logging.info(main_tweet_text)
-
-    
-
-    # Formatowanie tweeta z pozostałymi tokenami (4-5)
-
-    tokens_reply_text = format_tokens_reply_tweet(top_tokens)
-
-    if tokens_reply_text:
-
-        logging.info(f"Prepared tokens reply tweet ({len(tokens_reply_text)} chars):")
-
-        logging.info(tokens_reply_text)
+    logging.info(tweet_text)
 
 
 
-    # Walidacja długości tweetów
+    if len(tweet_text) > 280:
 
-    max_length = config.get('twitter', {}).get('max_tweet_length', 280)
+        logging.warning(f"Generated main tweet is too long ({len(tweet_text)} chars). Twitter will likely reject it.")
 
-    warn_on_long = config.get('twitter', {}).get('warn_on_long_tweet', True)
+        # Można dodać return, jeśli nie chcemy próbować wysyłać za długiego tweeta
 
-    
-
-    if warn_on_long and len(main_tweet_text) > max_length:
-
-        logging.warning(f"Generated main tweet is too long ({len(main_tweet_text)} chars). Twitter will likely reject it.")
-
-    
-
-    if tokens_reply_text and warn_on_long and len(tokens_reply_text) > max_length:
-
-        logging.warning(f"Generated tokens reply tweet is too long ({len(tokens_reply_text)} chars). Twitter will likely reject it.")
+        # return
 
 
 
@@ -621,7 +239,7 @@ def main():
 
             try:
 
-                media = retry_api_call(api_v1.media_upload, image_path)
+                media = api_v1.media_upload(image_path)
 
                 media_id = media.media_id
 
@@ -635,29 +253,15 @@ def main():
 
 
 
-        # Wysyłanie głównego tweeta z grafiką (jeśli się udało) - z retry
+        # Wysyłanie głównego tweeta z grafiką (jeśli się udało)
 
         if media_id:
 
-            response_main_tweet = retry_api_call(
-
-                client.create_tweet, 
-
-                text=main_tweet_text, 
-
-                media_ids=[media_id]
-
-            )
+            response_main_tweet = client.create_tweet(text=tweet_text, media_ids=[media_id] if media_id else None)
 
         else:
 
-            response_main_tweet = retry_api_call(
-
-                client.create_tweet, 
-
-                text=main_tweet_text
-
-            )
+            response_main_tweet = client.create_tweet(text=tweet_text)
 
         main_tweet_id = response_main_tweet.data['id']
 
@@ -665,93 +269,107 @@ def main():
 
 
 
-        # Wysyłanie tweeta z pozostałymi tokenami (jeśli istnieją)
+        # Wait at least 60 seconds before sending reply
 
-        tokens_reply_id = None
+        time.sleep(120)
 
-        if tokens_reply_text:
 
-            # Wait before sending tokens reply
 
-            tokens_delay = config.get('timing', {}).get('tokens_reply_delay_seconds', 120)
+        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi (z grafiką)
 
-            logging.info(f"Waiting {tokens_delay} seconds before sending tokens reply...")
+        link_tweet_text = format_link_tweet()
 
-            time.sleep(tokens_delay)
+        logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
 
-            
+        logging.info(link_tweet_text)
 
-            # Upload image for tokens reply
 
-            tokens_image_path = config.get('images', {}).get('tokens_reply_image', 'images/msgtwt.png')
 
-            tokens_media_id = None
+        if len(link_tweet_text) > 280:
 
-            
+            logging.warning(f"Generated reply tweet is too long ({len(link_tweet_text)} chars). Twitter will likely reject it.")
 
-            if not os.path.isfile(tokens_image_path):
+            # Można zdecydować, czy mimo to próbować wysłać, czy pominąć odpowiedź
 
-                logging.error(f"Tokens reply image file not found: {tokens_image_path}. Sending reply without image.")
+            # return lub continue w pętli (ale tu nie ma pętli)
 
-            else:
 
-                try:
 
-                    tokens_media = retry_api_call(api_v1.media_upload, tokens_image_path)
+        # --- Dodanie grafiki do odpowiedzi ---
 
-                    tokens_media_id = tokens_media.media_id
+        reply_image_path = os.path.join("images", "msgtwtft.png")
 
-                    logging.info(f"Tokens reply image uploaded successfully. Media ID: {tokens_media_id}")
+        if not os.path.isfile(reply_image_path):
 
-                except Exception as e:
+            logging.error(f"Reply image file not found: {reply_image_path}. Sending reply without image.")
 
-                    logging.error(f"Error uploading tokens reply image: {e}. Sending reply without image.")
-
-            
-
-            # Send tokens reply tweet
-
-            if tokens_media_id:
-
-                response_tokens_reply = retry_api_call(
-
-                    client.create_tweet,
-
-                    text=tokens_reply_text,
-
-                    in_reply_to_tweet_id=main_tweet_id,
-
-                    media_ids=[tokens_media_id]
-
-                )
-
-            else:
-
-                response_tokens_reply = retry_api_call(
-
-                    client.create_tweet,
-
-                    text=tokens_reply_text,
-
-                    in_reply_to_tweet_id=main_tweet_id
-
-                )
-
-            tokens_reply_id = response_tokens_reply.data['id']
-
-            logging.info(f"Tokens reply tweet sent successfully! Tweet ID: {tokens_reply_id}")
+            reply_media_id = None
 
         else:
 
-            logging.info("No additional tokens to display in reply tweet.")
+            try:
+
+                reply_media = api_v1.media_upload(reply_image_path)
+
+                reply_media_id = reply_media.media_id
+
+                logging.info(f"Reply image uploaded successfully. Media ID: {reply_media_id}")
+
+            except Exception as e:
+
+                logging.error(f"Error uploading reply image: {e}. Sending reply without image.")
+
+                reply_media_id = None
 
 
+
+        # Send reply tweet
+
+        if reply_media_id:
+
+            response_reply_tweet = client.create_tweet(
+
+                text=link_tweet_text,
+
+                in_reply_to_tweet_id=main_tweet_id,
+
+                media_ids=[reply_media_id]
+
+            )
+
+        else:
+
+            response_reply_tweet = client.create_tweet(
+
+                text=link_tweet_text,
+
+                in_reply_to_tweet_id=main_tweet_id
+
+            )
+
+        reply_tweet_id = response_reply_tweet.data['id']
+
+        logging.info(f"Reply tweet sent successfully! Tweet ID: {reply_tweet_id}")
+
+
+
+    except tweepy.TooManyRequests as e:
+
+        reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
+
+        current_time = int(time.time())
+
+        wait_time = max(reset_time - current_time + 10, 60)
+
+        logging.error(f"Rate limit exceeded. Need to wait {wait_time} seconds before retrying")
+
+    except tweepy.TweepyException as e:
+
+        logging.error(f"Twitter API error sending tweet: {e}")
 
     except Exception as e:
 
-        logging.error(f"Critical error in tweet sending process: {e}")
-
-        logging.error("Tweet sending failed after all retry attempts.")
+        logging.error(f"Unexpected error sending tweet: {e}")
 
 
 
@@ -784,3 +402,33 @@ if __name__ == "__main__":
             pass
 
     main()
+
+def create_tweets_with_rate_limit(client, tweets_to_send):
+    """
+    Send tweets with proper rate limiting
+    """
+    for tweet in tweets_to_send:
+        try:
+            response = client.create_tweet(text=tweet)
+            print(f"Tweet sent successfully: {response.data['id']}")
+            # Wait at least 60 seconds between tweets to avoid rate limits
+            time.sleep(60)  # 60 seconds = 1 minute
+        except tweepy.TooManyRequests as e:
+            # Get the reset time from the error response
+            reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
+            current_time = int(time.time())
+            # Calculate wait time (add 10 seconds buffer)
+            wait_time = max(reset_time - current_time + 10, 60)
+            
+            print(f"Rate limit exceeded. Waiting {wait_time} seconds")
+            time.sleep(wait_time)
+            # Retry the tweet after waiting
+            try:
+                response = client.create_tweet(text=tweet)
+                print(f"Tweet sent successfully after waiting: {response.data['id']}")
+            except Exception as retry_e:
+                print(f"Failed to send tweet even after waiting: {retry_e}")
+        except Exception as e:
+            print(f"Error sending tweet: {e}")
+            # Wait before trying the next tweet anyway
+            time.sleep(60)
