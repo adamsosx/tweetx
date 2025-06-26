@@ -14,14 +14,12 @@
   },
   "timing": {
     "tokens_reply_delay_seconds": 120,
-    "link_reply_delay_seconds": 180,
     "rate_limit_buffer_seconds": 10,
     "min_wait_between_requests": 1
   },
   "images": {
     "main_tweet_image": "images/msgtwt.png",
-    "tokens_reply_image": "images/msgtwt.png",
-    "link_reply_image": "images/msgtwtft.png",
+    "tokens_reply_image": "images/msgtwtft.png",
     "fallback_on_missing": false
   },
   "tweet_templates": {
@@ -32,14 +30,10 @@
       "footer": ""
     },
     "tokens_reply_tweet": {
-      "header": "🔄 Continuing Top {total_count}...\n\n",
+      "header": "",
       "medals": ["4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"],
       "token_format": "{medal} ${symbol}\n{address}\n📞 {calls}\n\n",
-      "footer": ""
-    },
-    "link_reply_tweet": {
-      "text": "🧪 Data from: 🔗 https://outlight.fun/\n#SOL #Outlight #TokenCalls ",
-      "additional_hashtags": ["#Crypto", "#DeFi"]
+      "footer": "\n🧪 Data from: 🔗 https://outlight.fun/\n#SOL #Outlight #TokenCalls #Crypto #DeFi"
     }
   },
   "twitter": {
