@@ -22,7 +22,7 @@ api_secret = os.getenv("TWITTER_API_SECRET")
 access_token = os.getenv("TWITTER_ACCESS_TOKEN")
 access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
-# URL API outlight.fun - z pierwszego kodu (1h timeframe)
+# URL API outlight.fun - (1h timeframe)
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
@@ -45,46 +45,49 @@ def get_top_tokens():
 
         # Sortuj po liczbie filtered_calls malejąco
         sorted_tokens = sorted(tokens_with_filtered_calls, key=lambda x: x.get('filtered_calls', 0), reverse=True)
-        # ZMIANA: Zwracamy Top 5 zamiast Top 3
+        # Zwracamy Top 5
         top_5 = sorted_tokens[:5]
         return top_5
     except Exception as e:
         logging.error(f"Unexpected error in get_top_tokens: {e}")
         return None
 
-def format_main_tweet(top_tokens):
-    """Format the main tweet with up to 3 tokens."""
-    # ZMIANA: Zaktualizowany tytuł na Top 5
+def format_main_tweet(top_3_tokens):
+    """Format tweet with top 3 tokens."""
     tweet = f"🚀Top 5 Most 📞 1h\n\n"
     medals = ['🥇', '🥈', '🥉']
-    for i, token in enumerate(top_tokens, 0):
+    for i, token in enumerate(top_3_tokens, 0):
         calls = token.get('filtered_calls', 0)
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
-        medal = medals[i] if i < len(medals) else f"{i+1}."
+        medal = medals[i]
         tweet += f"{medal} ${symbol}\n"
         tweet += f"{address}\n"
         tweet += f"📞 {calls}\n\n"
-    tweet = tweet.rstrip('\n') + '\n' # Usunięto podwójny \n, aby zaoszczędzić miejsce
+    tweet = tweet.rstrip('\n') + '\n'
     return tweet
 
-def format_continuation_tweet(next_tokens):
-    """Format the continuation tweet for tokens 4 and 5."""
+def format_reply_tweet(continuation_tokens):
+    """
+    Formatuje drugiego tweeta (odpowiedź).
+    Zawiera tokeny 4 i 5 (jeśli istnieją), a następnie link i hashtagi.
+    """
     tweet = ""
-    for i, token in enumerate(next_tokens, 4): # Zaczynamy numerację od 4
-        calls = token.get('filtered_calls', 0)
-        symbol = token.get('symbol', 'Unknown')
-        address = token.get('address', 'No Address Provided')
-        medal = f"{i}." # Używamy numerów dla kolejnych miejsc
-        tweet += f"{medal} ${symbol}\n"
-        tweet += f"{address}\n"
-        tweet += f"📞 {calls}\n\n"
-    tweet = tweet.rstrip('\n')
-    return tweet
+    # Dodaj tokeny 4 i 5, jeśli istnieją
+    if continuation_tokens:
+        for i, token in enumerate(continuation_tokens, 4):
+            calls = token.get('filtered_calls', 0)
+            symbol = token.get('symbol', 'Unknown')
+            address = token.get('address', 'No Address Provided')
+            medal = f"{i}."
+            tweet += f"{medal} ${symbol}\n"
+            tweet += f"{address}\n"
+            tweet += f"📞 {calls}\n\n"
+    
+    # Zawsze dodaj link i hashtagi na końcu
+    tweet += "\ud83e\uddea Data from: \ud83d\udd17 https://outlight.fun/\n#SOL #Outlight #TokenCalls "
+    return tweet.strip()
 
-def format_link_tweet():
-    """Format the link tweet (final reply)"""
-    return "\ud83e\uddea Data from: \ud83d\udd17 https://outlight.fun/\n#SOL #Outlight #TokenCalls "
 
 def main():
     logging.info("GitHub Action: Bot execution started.")
@@ -94,7 +97,7 @@ def main():
         return
 
     try:
-        # Klient v2 do tweetów tekstowych i odpowiedzi
+        # Klient v2
         client = tweepy.Client(
             consumer_key=api_key,
             consumer_secret=api_secret,
@@ -114,13 +117,12 @@ def main():
         logging.error(f"Unexpected error during Twitter client setup: {e}")
         return
 
-    # ZMIANA: Pobieramy Top 5 tokenów
     top_tokens = get_top_tokens()
-    if not top_tokens: # Obsługuje zarówno None (błąd API) jak i pustą listę (brak tokenów)
+    if not top_tokens:
         logging.warning("Failed to fetch top tokens or no tokens returned. Skipping tweet.")
         return
 
-    # Przygotowanie pierwszego tweeta (tokeny 1-3)
+    # Przygotowanie i wysłanie głównego tweeta (tokeny 1-3)
     main_tweet_text = format_main_tweet(top_tokens[:3])
     logging.info(f"Prepared main tweet ({len(main_tweet_text)} chars):")
     logging.info(main_tweet_text)
@@ -141,45 +143,26 @@ def main():
                 logging.info(f"Image uploaded successfully. Media ID: {media_id}")
             except Exception as e:
                 logging.error(f"Error uploading image: {e}. Sending tweet without image.")
-        
+
         # Wysyłanie głównego tweeta
         response_main_tweet = client.create_tweet(
-            text=main_tweet_text, 
+            text=main_tweet_text,
             media_ids=[media_id] if media_id else None
         )
         main_tweet_id = response_main_tweet.data['id']
         logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}")
-        
-        last_tweet_id = main_tweet_id # ID ostatniego tweeta, na który będziemy odpowiadać
 
-        # Czekamy przed wysłaniem kolejnego tweeta
-        time.sleep(60)
+        # Czekaj przed wysłaniem odpowiedzi
+        time.sleep(120)
 
-        # ZMIANA: Przygotowanie i wysłanie drugiego tweeta (tokeny 4-5), jeśli istnieją
+        # Przygotowanie i wysłanie odpowiedzi (tokeny 4-5 + link)
         continuation_tokens = top_tokens[3:5]
-        if continuation_tokens:
-            continuation_tweet_text = format_continuation_tweet(continuation_tokens)
-            logging.info(f"Prepared continuation tweet ({len(continuation_tweet_text)} chars):")
-            logging.info(continuation_tweet_text)
+        reply_tweet_text = format_reply_tweet(continuation_tokens)
+        logging.info(f"Prepared reply tweet ({len(reply_tweet_text)} chars):")
+        logging.info(reply_tweet_text)
 
-            if len(continuation_tweet_text) > 280:
-                 logging.warning(f"Generated continuation tweet is too long ({len(continuation_tweet_text)} chars).")
-
-            response_continuation_tweet = client.create_tweet(
-                text=continuation_tweet_text,
-                in_reply_to_tweet_id=main_tweet_id
-            )
-            continuation_tweet_id = response_continuation_tweet.data['id']
-            logging.info(f"Continuation tweet sent successfully! Tweet ID: {continuation_tweet_id}")
-            last_tweet_id = continuation_tweet_id # Aktualizujemy ID ostatniego tweeta
-            
-            # Czekamy znowu przed ostatnią odpowiedzią
-            time.sleep(60)
-
-        # Przygotowanie i wysłanie tweeta z linkiem jako odpowiedzi na OSTATNI wysłany tweet
-        link_tweet_text = format_link_tweet()
-        logging.info(f"Prepared reply tweet ({len(link_tweet_text)} chars):")
-        logging.info(link_tweet_text)
+        if len(reply_tweet_text) > 280:
+            logging.warning(f"Generated reply tweet is too long ({len(reply_tweet_text)} chars).")
 
         # --- Dodanie grafiki do odpowiedzi ---
         reply_image_path = os.path.join("images", "msgtwtft.png")
@@ -194,14 +177,14 @@ def main():
             except Exception as e:
                 logging.error(f"Error uploading reply image: {e}. Sending reply without image.")
         
-        # Wyślij odpowiedź z linkiem
+        # Wyślij odpowiedź
         response_reply_tweet = client.create_tweet(
-            text=link_tweet_text,
-            in_reply_to_tweet_id=last_tweet_id,
+            text=reply_tweet_text,
+            in_reply_to_tweet_id=main_tweet_id,
             media_ids=[reply_media_id] if reply_media_id else None
         )
         reply_tweet_id = response_reply_tweet.data['id']
-        logging.info(f"Final reply tweet sent successfully! Tweet ID: {reply_tweet_id}")
+        logging.info(f"Reply tweet sent successfully! Tweet ID: {reply_tweet_id}")
 
     except tweepy.TooManyRequests as e:
         reset_time = int(e.response.headers.get('x-rate-limit-reset', 0))
