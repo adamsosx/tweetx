@@ -1,0 +1,62 @@
+{
+  "api": {
+    "outlight_base_url": "https://outlight.fun/api/tokens/most-called",
+    "timeframe": "1h",
+    "request_timeout": 30,
+    "verify_ssl": false,
+    "retry_attempts": 3
+  },
+  "token_filtering": {
+    "min_win_rate": 30,
+    "top_tokens_count": 5,
+    "first_tweet_count": 3,
+    "second_tweet_count": 2
+  },
+  "timing": {
+    "tokens_reply_delay_seconds": 120,
+    "link_reply_delay_seconds": 180,
+    "rate_limit_buffer_seconds": 10,
+    "min_wait_between_requests": 1
+  },
+  "images": {
+    "main_tweet_image": "images/msgtwt.png",
+    "tokens_reply_image": "images/msgtwt.png",
+    "link_reply_image": "images/msgtwtft.png",
+    "fallback_on_missing": false
+  },
+  "tweet_templates": {
+    "main_tweet": {
+      "header": "🚀Top {count} Most 📞 {timeframe}\n\n",
+      "medals": ["🥇", "🥈", "🥉"],
+      "token_format": "{medal} ${symbol}\n{address}\n📞 {calls}\n\n",
+      "footer": ""
+    },
+    "tokens_reply_tweet": {
+      "header": "🔄 Continuing Top {total_count}...\n\n",
+      "medals": ["4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"],
+      "token_format": "{medal} ${symbol}\n{address}\n📞 {calls}\n\n",
+      "footer": ""
+    },
+    "link_reply_tweet": {
+      "text": "🧪 Data from: 🔗 https://outlight.fun/\n#SOL #Outlight #TokenCalls ",
+      "additional_hashtags": ["#Crypto", "#DeFi"]
+    }
+  },
+  "twitter": {
+    "max_tweet_length": 280,
+    "warn_on_long_tweet": true,
+    "retry": {
+      "max_attempts": 3,
+      "base_delay": 5,
+      "max_delay": 300,
+      "backoff_multiplier": 2,
+      "retryable_status_codes": [429, 500, 502, 503, 504],
+      "retryable_exceptions": ["ConnectionError", "Timeout", "TooManyRequests"]
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(levelname)s - %(message)s",
+    "console_output": true
+  }
+} 
