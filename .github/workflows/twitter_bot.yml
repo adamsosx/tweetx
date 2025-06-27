@@ -1,34 +1,52 @@
-name: Hourly Twitter BotAdd commentMore actions
+
+### Wyjaśnienie zmiany
+*   `*/2` w polu godziny oznacza "co drugą godzinę".
+*   `*` w polu godziny oznacza "co każdą godzinę".
+
+### Kompletny, zaktualizowany plik
+
+Skopiuj poniższą treść i podmień ją w swoim pliku konfiguracyjnym GitHub Actions.
+
+```yaml
+name: Monty Twitter Bot
 
 on:
+  # 1. Uruchamiaj automatycznie co godzinę
   schedule:
-    # Uruchamiaj co godzinę (o pełnej godzinie, np. 1:00, 2:00, itd.)
-    # Zobacz https://crontab.guru/ dla pomocy z cronem
+    # Składnia cron: minuta godzina dzień-miesiąca miesiąc dzień-tygodnia
+    # '0 * * * *' oznacza "o minucie 0, co każdą godzinę, każdego dnia".
     - cron: '0 * * * *'
-  workflow_dispatch: # Pozwala na ręczne uruchomienie z panelu Actions
+
+  # 2. Pozwól na ręczne uruchomienie z panelu Actions na GitHubie
+  workflow_dispatch:
 
 jobs:
-  run-bot:
-    runs-on: ubuntu-latest # Użyj najnowszego dostępnego środowiska Ubuntu
+  tweet:
+    runs-on: ubuntu-latest
+
     steps:
+      # Krok 1: Pobranie kodu z repozytorium
       - name: Checkout repository
-        uses: actions/checkout@v4 # Zawsze używaj aktualnej wersji akcji
+        uses: actions/checkout@v4
 
+      # Krok 2: Ustawienie środowiska Python
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9' # Możesz wybrać inną wersję Pythona
+          python-version: '3.10'
 
+      # Krok 3: Instalacja bibliotek z pliku requirements.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install tweepy requests # Alternatywnie, jeśli nie ma requirements.txt
+          pip install -r requirements.txt
 
-      - name: Run Twitter Bot script
-        env: # Przekazanie sekretów jako zmienne środowiskowe do skryptu
+      # Krok 4: Uruchomienie bota z przekazaniem sekretów
+      - name: Run Twitter Bot
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          BOT1_ACCESS_TOKEN: ${{ secrets.BOT1_ACCESS_TOKEN }}
-          BOT1_ACCESS_TOKEN_SECRET: ${{ secrets.BOT1_ACCESS_TOKEN_SECRET }}
-        run: python twitter_bot.py # ZMIEŃ na nazwę Twojego pliku .py
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+        run: python twitter_bot.py
