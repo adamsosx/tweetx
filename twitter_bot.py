@@ -19,8 +19,8 @@ logging.basicConfig(
 # Klucze API odczytywane ze zmiennych środowiskowych
 api_key = os.getenv("TWITTER_API_KEY")
 api_secret = os.getenv("TWITTER_API_SECRET")
-access_token = os.getenv("BOT1_ACCESS_TOKEN")
-access_token_secret = os.getenv("BOT1_ACCESS_TOKEN_SECRET")
+access_token = os.getenv("TWITTER_ACCESS_TOKEN")
+access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - (1h timeframe)
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
@@ -205,4 +205,4 @@ if __name__ == "__main__":
             logging.warning("SSL verification is disabled for requests (verify=False). This is not recommended.")
         except AttributeError:
             logging.warning("Could not disable InsecureRequestWarning for requests.")
-    main() 
+    main()
