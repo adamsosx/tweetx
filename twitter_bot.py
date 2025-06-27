@@ -7,6 +7,8 @@ import logging
 import os
 import functools
 import random
+from requests.exceptions import ConnectionError, Timeout, RequestException
+from urllib3.exceptions import ProtocolError
 
 # Dodane do obsługi uploadu grafiki
 from tweepy import OAuth1UserHandler, API
@@ -18,10 +20,10 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()] # Logowanie do konsoli/outputu Akcji
 )
 
-# Dekorator do obsługi rate limit
+# Dekorator do obsługi rate limit i błędów połączenia
 def rate_limit_handler(max_retries=3, base_delay=60):
     """
-    Dekorator do obsługi rate limit Twitter API.
+    Dekorator do obsługi rate limit Twitter API i błędów połączenia.
     Automatycznie ponawia żądania z exponential backoff.
     """
     def decorator(func):
@@ -43,18 +45,55 @@ def rate_limit_handler(max_retries=3, base_delay=60):
                     current_time = int(time.time())
                     wait_time = max(reset_time - current_time + 10, delay)
                     
+                    # Ogranicz maksymalny czas oczekiwania do 10 minut dla GitHub Actions
+                    wait_time = min(wait_time, 600)
+                    
                     # Dodaj losowe opóźnienie (jitter) aby uniknąć thundering herd
                     jitter = random.randint(0, min(30, int(wait_time * 0.1)))
                     wait_time += jitter
                     
                     logging.warning(f"Rate limit hit in {func.__name__}. Waiting {wait_time} seconds before retry {retries + 1}/{max_retries}")
-                    time.sleep(wait_time)
+                    wait_with_progress(wait_time, f"rate limit reset for {func.__name__}")
                     
                     retries += 1
                     delay *= 2  # Exponential backoff
+                    
+                except (ConnectionError, ProtocolError, Timeout, RequestException) as e:
+                    if retries == max_retries:
+                        logging.error(f"Network error after {max_retries} retries for {func.__name__}: {e}")
+                        return None
+                    
+                    # Krótszy czas oczekiwania dla błędów połączenia
+                    network_delay = min(delay, 30)
+                    jitter = random.randint(1, 10)
+                    wait_time = network_delay + jitter
+                    
+                    logging.warning(f"Network error in {func.__name__}: {e}. Waiting {wait_time} seconds before retry {retries + 1}/{max_retries}")
+                    wait_with_progress(wait_time, f"network retry for {func.__name__}")
+                    
+                    retries += 1
+                    delay = min(delay * 1.5, 60)  # Wolniejszy exponential backoff dla błędów sieciowych
+                    
+                except tweepy.TweepyException as e:
+                    if retries == max_retries:
+                        logging.error(f"Tweepy error after {max_retries} retries for {func.__name__}: {e}")
+                        return None
+                    
+                    # Krótki czas oczekiwania dla błędów API
+                    api_delay = min(delay // 2, 30) 
+                    jitter = random.randint(1, 5)
+                    wait_time = api_delay + jitter
+                    
+                    logging.warning(f"Tweepy error in {func.__name__}: {e}. Waiting {wait_time} seconds before retry {retries + 1}/{max_retries}")
+                    wait_with_progress(wait_time, f"API retry for {func.__name__}")
+                    
+                    retries += 1
+                    delay = min(delay * 1.5, 60)
+                    
                 except Exception as e:
-                    # Przekaż inne wyjątki
-                    raise
+                    # Nieoczekiwane wyjątki - loguj i zwróć None
+                    logging.error(f"Unexpected error in {func.__name__}: {e}")
+                    return None
             
             return None
         return wrapper
@@ -91,11 +130,46 @@ class RateLimitMonitor:
 # Instancja monitora rate limit
 rate_monitor = RateLimitMonitor()
 
+def wait_with_progress(wait_time, action_name):
+    """Czeka z pokazywaniem postępu co minutę"""
+    if wait_time <= 60:
+        time.sleep(wait_time)
+        return
+    
+    logging.info(f"Starting {wait_time} second wait for {action_name}...")
+    start_time = time.time()
+    
+    while True:
+        elapsed = time.time() - start_time
+        remaining = wait_time - elapsed
+        
+        if remaining <= 0:
+            break
+            
+        if elapsed > 0 and int(elapsed) % 60 == 0:  # Log co minutę
+            minutes_remaining = int(remaining // 60)
+            seconds_remaining = int(remaining % 60)
+            logging.info(f"Still waiting for {action_name}: {minutes_remaining}m {seconds_remaining}s remaining...")
+        
+        time.sleep(min(1, remaining))  # Śpi maksymalnie 1 sekundę
+    
+    logging.info(f"Wait completed for {action_name}")
+
+def should_continue_waiting(wait_time, max_wait=900):
+    """
+    Sprawdza czy warto kontynuować oczekiwanie na rate limit.
+    GitHub Actions ma ograniczenia czasowe, więc długie oczekiwanie może nie mieć sensu.
+    """
+    if wait_time > max_wait:
+        logging.warning(f"Rate limit wait time ({wait_time}s) exceeds maximum ({max_wait}s). Consider skipping this execution.")
+        return False
+    return True
+
 # Klucze API odczytywane ze zmiennych środowiskowych
 api_key = os.getenv("TWITTER_API_KEY")
 api_secret = os.getenv("TWITTER_API_SECRET")
-access_token = os.getenv("BOT4_ACCESS_TOKEN")
-access_token_secret = os.getenv("BOT4_ACCESS_TOKEN_SECRET")
+access_token = os.getenv("TWITTER_ACCESS_TOKEN")
+access_token_secret = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - (1h timeframe)
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
@@ -103,7 +177,7 @@ OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
 def get_top_tokens():
     """Pobiera dane z API outlight.fun i zwraca top 5 tokenów, licząc tylko kanały z win_rate > 30%"""
     try:
-        response = requests.get(OUTLIGHT_API_URL, verify=False)
+        response = requests.get(OUTLIGHT_API_URL, verify=False, timeout=30)
         response.raise_for_status()
         data = response.json()
 
@@ -192,7 +266,8 @@ def main():
             consumer_key=api_key,
             consumer_secret=api_secret,
             access_token=access_token,
-            access_token_secret=access_token_secret
+            access_token_secret=access_token_secret,
+            wait_on_rate_limit=False  # Wyłączamy wbudowaną obsługę rate limit
         )
         me = safe_get_me(client)
         if me:
@@ -255,7 +330,8 @@ def main():
     logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}")
 
     # Czekaj przed wysłaniem odpowiedzi
-    time.sleep(120)
+    logging.info("Waiting 2 minutes before sending reply tweet...")
+    wait_with_progress(120, "reply tweet delay")
 
     # Przygotowanie i wysłanie odpowiedzi (tokeny 4-5 + link)
     continuation_tokens = top_tokens[3:5]
