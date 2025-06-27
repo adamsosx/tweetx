@@ -1,13 +1,3 @@
-
-### Wyjaśnienie zmiany
-*   `*/2` w polu godziny oznacza "co drugą godzinę".
-*   `*` w polu godziny oznacza "co każdą godzinę".
-
-### Kompletny, zaktualizowany plik
-
-Skopiuj poniższą treść i podmień ją w swoim pliku konfiguracyjnym GitHub Actions.
-
-```yaml
 name: Monty Twitter Bot
 
 on:
