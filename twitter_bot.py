@@ -19,8 +19,8 @@ logging.basicConfig(
 # Klucze API odczytywane ze zmiennych środowiskowych
 api_key = os.getenv("TWITTER_API_KEY")
 api_secret = os.getenv("TWITTER_API_SECRET")
-access_token = os.getenv("BOT3_ACCESS_TOKEN")
-access_token_secret = os.getenv("BOT3_ACCESS_TOKEN_SECRET")
+access_token = os.getenv("BOT4_ACCESS_TOKEN")
+access_token_secret = os.getenv("BOT4_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - (1h timeframe)
 OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
