@@ -165,7 +165,7 @@ def main():
             logging.warning(f"Generated reply tweet is too long ({len(reply_tweet_text)} chars).")
 
         # --- Dodanie grafiki do odpowiedzi ---
-        reply_image_path = os.path.join("images", "montb.gif")
+        reply_image_path = os.path.join("images", "mont.gif")
         reply_media_id = None
         if not os.path.isfile(reply_image_path):
             logging.error(f"Reply image file not found: {reply_image_path}. Sending reply without image.")
