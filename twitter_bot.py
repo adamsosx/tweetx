@@ -132,7 +132,7 @@ def main():
 
     try:
         # --- Dodanie grafiki do głównego tweeta ---
-        image_path = os.path.join("images", "msgtwt.png")
+        image_path = os.path.join("images", "monta.gif")
         media_id = None
         if not os.path.isfile(image_path):
             logging.error(f"Image file not found: {image_path}. Sending tweet without image.")
@@ -165,7 +165,7 @@ def main():
             logging.warning(f"Generated reply tweet is too long ({len(reply_tweet_text)} chars).")
 
         # --- Dodanie grafiki do odpowiedzi ---
-        reply_image_path = os.path.join("images", "msgtwtft.png")
+        reply_image_path = os.path.join("images", "montb.gif")
         reply_media_id = None
         if not os.path.isfile(reply_image_path):
             logging.error(f"Reply image file not found: {reply_image_path}. Sending reply without image.")
