@@ -132,7 +132,7 @@ def main():
 
     try:
         # --- Dodanie grafiki do głównego tweeta ---
-        image_path = os.path.join("images", "monta.gif")
+        image_path = os.path.join("images", "montb.gif")
         media_id = None
         if not os.path.isfile(image_path):
             logging.error(f"Image file not found: {image_path}. Sending tweet without image.")
