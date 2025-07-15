@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import logging
 import os
 
-# Dodane do obsługi uploadu grafiki
+# Importy do obsługi Twitter API
 from tweepy import OAuth1UserHandler, API
 
 # Konfiguracja logowania
@@ -107,7 +107,7 @@ def main():
         me = client.get_me()
         logging.info(f"Successfully authenticated on Twitter as @{me.data.username}")
 
-        # Klient v1.1 do uploadu grafiki
+        # Klient v1.1 (zachowany dla kompatybilności)
         auth_v1 = OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
         api_v1 = API(auth_v1)
     except tweepy.TweepyException as e:
@@ -131,23 +131,9 @@ def main():
         logging.warning(f"Generated main tweet is too long ({len(main_tweet_text)} chars).")
 
     try:
-        # --- Dodanie grafiki do głównego tweeta ---
-        image_path = os.path.join("images", "montb.gif")
-        media_id = None
-        if not os.path.isfile(image_path):
-            logging.error(f"Image file not found: {image_path}. Sending tweet without image.")
-        else:
-            try:
-                media = api_v1.media_upload(image_path)
-                media_id = media.media_id
-                logging.info(f"Image uploaded successfully. Media ID: {media_id}")
-            except Exception as e:
-                logging.error(f"Error uploading image: {e}. Sending tweet without image.")
-
         # Wysyłanie głównego tweeta
         response_main_tweet = client.create_tweet(
-            text=main_tweet_text,
-            media_ids=[media_id] if media_id else None
+            text=main_tweet_text
         )
         main_tweet_id = response_main_tweet.data['id']
         logging.info(f"Main tweet sent successfully! Tweet ID: {main_tweet_id}")
@@ -164,24 +150,10 @@ def main():
         if len(reply_tweet_text) > 280:
             logging.warning(f"Generated reply tweet is too long ({len(reply_tweet_text)} chars).")
 
-        # --- Dodanie grafiki do odpowiedzi ---
-        reply_image_path = os.path.join("images", "mont.gif")
-        reply_media_id = None
-        if not os.path.isfile(reply_image_path):
-            logging.error(f"Reply image file not found: {reply_image_path}. Sending reply without image.")
-        else:
-            try:
-                reply_media = api_v1.media_upload(reply_image_path)
-                reply_media_id = reply_media.media_id
-                logging.info(f"Reply image uploaded successfully. Media ID: {reply_media_id}")
-            except Exception as e:
-                logging.error(f"Error uploading reply image: {e}. Sending reply without image.")
-        
         # Wyślij odpowiedź
         response_reply_tweet = client.create_tweet(
             text=reply_tweet_text,
-            in_reply_to_tweet_id=main_tweet_id,
-            media_ids=[reply_media_id] if reply_media_id else None
+            in_reply_to_tweet_id=main_tweet_id
         )
         reply_tweet_id = response_reply_tweet.data['id']
         logging.info(f"Reply tweet sent successfully! Tweet ID: {reply_tweet_id}")
