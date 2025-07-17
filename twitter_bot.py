@@ -54,7 +54,7 @@ def get_top_tokens():
 
 def format_main_tweet(top_3_tokens):
     """Format tweet with top 3 tokens."""
-    tweet = f"📊 Want to copy sniper entries from top KOLs? Get signals LIVE → outlight.fun \n\n"
+    tweet = f"📊 Want to copy sniper entries from top KOLs? → outlight.fun\n\n"
     tweet += f"🚀Top 5 Most 📞 1h\n\n"
     medals = ['🥇', '🥈', '🥉']
     for i, token in enumerate(top_3_tokens, 0):
