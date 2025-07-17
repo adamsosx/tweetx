@@ -54,7 +54,8 @@ def get_top_tokens():
 
 def format_main_tweet(top_3_tokens):
     """Format tweet with top 3 tokens."""
-    tweet = f"🚀Top 5 Most 📞 1h\n\n"
+    tweet = f"📊 Want to copy sniper entries from top KOLs? Get signals LIVE → outlight.fun \n\n"
+    tweet += f"🚀Top 5 Most 📞 1h\n\n"
     medals = ['🥇', '🥈', '🥉']
     for i, token in enumerate(top_3_tokens, 0):
         calls = token.get('filtered_calls', 0)
@@ -70,7 +71,7 @@ def format_main_tweet(top_3_tokens):
 def format_reply_tweet(continuation_tokens):
     """
     Formatuje drugiego tweeta (odpowiedź).
-    Zawiera tokeny 4 i 5 (jeśli istnieją), a następnie link i hashtagi.
+    Zawiera tokeny 4 i 5 (jeśli istnieją), a następnie hashtagi.
     """
     tweet = ""
     # Dodaj tokeny 4 i 5, jeśli istnieją
@@ -84,8 +85,8 @@ def format_reply_tweet(continuation_tokens):
             tweet += f"{address}\n"
             tweet += f"📞 {calls}\n\n"
     
-    # Zawsze dodaj link i hashtagi na końcu
-    tweet += "\ud83e\uddea Data from: \ud83d\udd17 https://outlight.fun/\n#SOL #Outlight #TokenCalls "
+    # Dodaj hashtagi na końcu
+    tweet += "#SOL #Outlight #TokenCalls"
     return tweet.strip()
 
 
