@@ -52,12 +52,12 @@ def get_top_tokens():
         logging.error(f"Unexpected error in get_top_tokens: {e}")
         return None
 
-def format_main_tweet(top_3_tokens):
-    """Format tweet with top 3 tokens."""
+def format_main_tweet(top_2_tokens):
+    """Format tweet with top 2 tokens."""
     tweet = f"📊 Want to copy sniper entries from top KOLs? → outlight.fun\n\n"
     tweet += f"🚀Top 5 Most 📞 1h\n\n"
-    medals = ['🥇', '🥈', '🥉']
-    for i, token in enumerate(top_3_tokens, 0):
+    medals = ['🥇', '🥈']
+    for i, token in enumerate(top_2_tokens, 0):
         calls = token.get('filtered_calls', 0)
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided')
@@ -71,16 +71,19 @@ def format_main_tweet(top_3_tokens):
 def format_reply_tweet(continuation_tokens):
     """
     Formatuje drugiego tweeta (odpowiedź).
-    Zawiera tokeny 4 i 5 (jeśli istnieją), a następnie hashtagi.
+    Zawiera tokeny 3, 4 i 5 (jeśli istnieją), a następnie hashtagi.
     """
     tweet = ""
-    # Dodaj tokeny 4 i 5, jeśli istnieją
+    # Dodaj tokeny 3, 4 i 5, jeśli istnieją
     if continuation_tokens:
-        for i, token in enumerate(continuation_tokens, 4):
+        for i, token in enumerate(continuation_tokens, 3):
             calls = token.get('filtered_calls', 0)
             symbol = token.get('symbol', 'Unknown')
             address = token.get('address', 'No Address Provided')
-            medal = f"{i}."
+            if i == 3:
+                medal = "🥉"
+            else:
+                medal = f"{i}."
             tweet += f"{medal} ${symbol}\n"
             tweet += f"{address}\n"
             tweet += f"📞 {calls}\n\n"
@@ -123,8 +126,8 @@ def main():
         logging.warning("Failed to fetch top tokens or no tokens returned. Skipping tweet.")
         return
 
-    # Przygotowanie i wysłanie głównego tweeta (tokeny 1-3)
-    main_tweet_text = format_main_tweet(top_tokens[:3])
+    # Przygotowanie i wysłanie głównego tweeta (tokeny 1-2)
+    main_tweet_text = format_main_tweet(top_tokens[:2])
     logging.info(f"Prepared main tweet ({len(main_tweet_text)} chars):")
     logging.info(main_tweet_text)
 
@@ -156,8 +159,8 @@ def main():
         # Czekaj przed wysłaniem odpowiedzi
         time.sleep(120)
 
-        # Przygotowanie i wysłanie odpowiedzi (tokeny 4-5 + link)
-        continuation_tokens = top_tokens[3:5]
+        # Przygotowanie i wysłanie odpowiedzi (tokeny 3-5)
+        continuation_tokens = top_tokens[2:5]
         reply_tweet_text = format_reply_tweet(continuation_tokens)
         logging.info(f"Prepared reply tweet ({len(reply_tweet_text)} chars):")
         logging.info(reply_tweet_text)
