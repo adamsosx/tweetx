@@ -23,7 +23,7 @@ access_token = os.getenv("BOT4_ACCESS_TOKEN")
 access_token_secret = os.getenv("BOT4_ACCESS_TOKEN_SECRET")
 
 # URL API outlight.fun - (1h timeframe)
-OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1h"
+OUTLIGHT_API_URL = "https://old.outlight.fun/api/tokens/most-called?timeframe=1h"
 
 def get_top_tokens():
     """Pobiera dane z API outlight.fun i zwraca top 5 tokenów, licząc tylko kanały z win_rate > 30%"""
