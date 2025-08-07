@@ -82,11 +82,10 @@ def format_main_tweet(top_2_tokens):
         "Nothing but vibes & unpaid interns 📞"
     ]
     
-    # Use timestamp to rotate headers and messages (changes every hour)
-    import time
-    current_hour = int(time.time() // 3600)
-    selected_header = headers[current_hour % len(headers)]
-    selected_bottom = bottom_messages[current_hour % len(bottom_messages)]
+    # Random rotation for headers and messages (changes every run)
+    import random
+    selected_header = random.choice(headers)
+    selected_bottom = random.choice(bottom_messages)
     
     tweet = f"{selected_header}\n\n"
     medals = ['🥇', '🥈']
