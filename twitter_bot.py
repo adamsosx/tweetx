@@ -62,7 +62,7 @@ def format_main_tweet(top_2_tokens):
         "🎯 Top Degen Focus (Callers)",
         "🤖 Monty Scraped This for You:",
         "📞 1h Top Called Leaderboard:",
-        "📡 Last 10h: Most Called Projects",
+        "📡 Last 1h: Most Called Projects",
         "📞 Degens are loud af Top 1h Calls:",
         "📞 Monty Call Sheet  1h",
         "🚨 1h Top Callers Report"
