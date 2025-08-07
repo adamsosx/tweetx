@@ -97,8 +97,8 @@ def format_main_tweet(top_2_tokens):
         tweet += f"{medal} ${symbol}\n"
         tweet += f"{address}\n"
         tweet += f"📞 {calls}\n\n"
-    tweet = tweet.rstrip('\n') + '\n'
-    tweet += "🔍 Explore https://outlight.fun\n"
+    tweet = tweet.rstrip('\n') + '\n\n'
+    tweet += "🔍 Explore https://outlight.fun\n\n"
     tweet += f"{selected_bottom}\n"
     tweet += "1/2"
     return tweet
