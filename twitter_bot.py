@@ -54,8 +54,41 @@ def get_top_tokens():
 
 def format_main_tweet(top_2_tokens):
     """Format tweet with top 2 tokens."""
-    tweet = f"🔍 Explore caller performance & token analytics → outlight.fun\n\n"
-    tweet += f"🚀Top 5 Most 📞 1h\n\n"
+    # Rotating headers for variety
+    headers = [
+        "🧠 Monty Log Dump - Top Called 1h",
+        "🚨 Most Called Tokens 1h", 
+        "📟 Monty Watch: 1h 📞 Frenzy",
+        "🎯 Top Degen Focus (Callers)",
+        "🤖 Monty Scraped This for You:",
+        "📞 1h Top Called Leaderboard:",
+        "📡 Last 10h: Most Called Projects",
+        "📞 Degens are loud af Top 1h Calls:",
+        "📞 Monty Call Sheet  1h",
+        "🚨 1h Top Callers Report"
+    ]
+    
+    # Rotating bottom messages
+    bottom_messages = [
+        "Degeneracy is alive and WELL 📞📞📞",
+        "Called more than your ex",
+        "Is it conviction or just click addiction?",
+        "High call count = high cope?",
+        "Get in or get laughed at",
+        "Chart going up? no clue. calls going beep",
+        "Zero fundamentals, max vibes",
+        "Calls mean nothing, but they do mean something",
+        "Degens only sleep when their wallets do 💤",
+        "Nothing but vibes & unpaid interns 📞"
+    ]
+    
+    # Use timestamp to rotate headers and messages (changes every hour)
+    import time
+    current_hour = int(time.time() // 3600)
+    selected_header = headers[current_hour % len(headers)]
+    selected_bottom = bottom_messages[current_hour % len(bottom_messages)]
+    
+    tweet = f"{selected_header}\n\n"
     medals = ['🥇', '🥈']
     for i, token in enumerate(top_2_tokens, 0):
         calls = token.get('filtered_calls', 0)
@@ -66,6 +99,9 @@ def format_main_tweet(top_2_tokens):
         tweet += f"{address}\n"
         tweet += f"📞 {calls}\n\n"
     tweet = tweet.rstrip('\n') + '\n'
+    tweet += "🔍 Explore https://outlight.fun\n"
+    tweet += f"{selected_bottom}\n"
+    tweet += "1/2"
     return tweet
 
 def format_reply_tweet(continuation_tokens):
@@ -89,7 +125,8 @@ def format_reply_tweet(continuation_tokens):
             tweet += f"📞 {calls}\n\n"
     
     # Dodaj hashtagi na końcu
-    tweet += "#SOL #Outlight #TokenCalls"
+    tweet += "#SOL #Outlight #TokenCalls\n"
+    tweet += "2/2"
     return tweet.strip()
 
 
